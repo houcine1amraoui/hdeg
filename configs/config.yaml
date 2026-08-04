@@ -1,0 +1,53 @@
+# change the project root directory if using colab
+# e.g., "/content/drive/MyDrive/gnn"
+project_root_dir: .
+
+seed: 42
+
+preprocessing:
+  dataset_folder: data
+  merge_bre_cu: false # true or false
+  dataset_name: CU # CU or BRE
+  apply_filtering: true
+  apply_cleaning: true # should be true for CU because it has NaN column
+  downsample_freq: 1s
+  val_ratio: 0.1
+  actors_timelines:
+    actor1_t1_start: "2022-10-18 00:00:00"
+    actor1_t1_end: "2022-11-07 23:59:59"
+    actor2_start: "2022-11-08 00:00:00"
+    actor2_end: "2022-11-10 23:59:59"
+    actor1_t2_start: "2022-11-11 00:00:00"
+    actor1_t2_end: "2022-11-17 23:59:59"
+
+models:
+  - name: "gdn"
+    enabled: true
+    params:
+      hidden_dim: 64
+      topk: 15 # previously 15
+      heads: 1
+
+  - name: "mtad_gat"
+    enabled: true
+    params:
+      kernel_size: 5
+      gru_hidden_dim: 100 # 100 prev
+      gat_heads: 2 # 2 prev
+
+training:
+  model: mtad_gat
+  window_size: 30
+  batch_size: 32
+  epochs: 50
+  lr: 0.0001
+  patience: 10
+
+evaluation:
+  model: mtad_gat
+  batch_size: 32
+  score_type: combined # combined, reconstruction, forecast
+  score_aggregation: max # mean or max
+  score_smoothing_enabled: true
+  score_smoothing_window: 5
+  threshold_percentile: 90

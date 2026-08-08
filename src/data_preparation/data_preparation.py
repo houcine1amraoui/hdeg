@@ -8,7 +8,7 @@ from src.utils.get_folders_utils import get_dataset_path
 
 def filter_columns_one_data(df, config):
     dataset_name = config["preprocessing"]["dataset_name"]
-    selected_devices_path = f"configs/{dataset_name}_selected_devices.txt"
+    selected_devices_path = f"configs/{dataset_name}_selected_features.txt"
 
     print(f"Filtering {dataset_name} data...")
 
@@ -261,7 +261,7 @@ def preprocessing_pipeline(config):
     """
     Full preprocessing pipeline for GDN:
     1. Load CSV data (either BRE or CU or both merged)
-    2. OPTIONAL: Filter data: keep selected columns only 
+    2. OPTIONAL: Filter data: keep selected features only 
     3. OPTIONAL: Clean data (CU only)
     4. OPTIONAL: Downsample data to target frequency
     5. Split actors timelines (train/val/test)
@@ -281,7 +281,7 @@ def preprocessing_pipeline(config):
     if merge_bre_cu: df = load_and_merge_bre_cu(config) # both BRE and CU
     else: df = load_one_data(config) # one data 
     
-    # 2. Filter data (if enabled): keep selected columns only
+    # 2. Filter data (if enabled): keep selected features only
     apply_filtering = config["preprocessing"]["apply_filtering"]
     if apply_filtering:
         if merge_bre_cu: df = filter_columns_merged_data(df)

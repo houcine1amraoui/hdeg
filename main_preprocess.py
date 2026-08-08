@@ -1,4 +1,4 @@
-from src.preprocessing.preprocessing import preprocessing_pipeline
+from src.data_preparation.data_preparation import preprocessing_pipeline
 from src.utils.save_utils import save_processed_data
 import yaml
 import argparse

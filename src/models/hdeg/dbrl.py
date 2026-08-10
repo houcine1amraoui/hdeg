@@ -31,6 +31,8 @@ class DBRL(nn.Module):
         W = temporal window length
         N = number of devices
 
+        Each device contributes one scalar feature at every time step.
+
     Output
     ------
     Tensor of shape ``(B, N, D)`` where:
@@ -48,7 +50,6 @@ class DBRL(nn.Module):
 
     def __init__(
         self,
-        input_dim: int = 1,
         hidden_dim: int = 64,
         embedding_dim: int = 64,
         gru_layers: int = 1,
@@ -61,7 +62,18 @@ class DBRL(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.input_dim = input_dim
+        self._validate_constructor_parameters(
+            hidden_dim=hidden_dim,
+            embedding_dim=embedding_dim,
+            gru_layers=gru_layers,
+            dropout=dropout,
+            graph_top_k=graph_top_k,
+            graph_self_loops=graph_self_loops,
+            graph_symmetric=graph_symmetric,
+            graph_heads=graph_heads,
+            graph_dropout=graph_dropout,
+        )
+
         self.hidden_dim = hidden_dim
         self.embedding_dim = embedding_dim
         self.gru_layers = gru_layers
@@ -69,8 +81,13 @@ class DBRL(nn.Module):
         # ---------------------------------------------------------
         # Temporal Behavior Encoder
         # ---------------------------------------------------------
+        #
+        # Each device observation is a scalar-valued sequence.
+        # DBRL input has shape (B, W, N), and each device sequence
+        # is transformed into (B*N, W, 1) before entering the GRU.
+        # ---------------------------------------------------------
         self.temporal_encoder = nn.GRU(
-            input_size=input_dim,
+            input_size=1,
             hidden_size=hidden_dim,
             num_layers=gru_layers,
             batch_first=True,
@@ -102,6 +119,73 @@ class DBRL(nn.Module):
             heads=graph_heads,
             dropout=graph_dropout,
         )
+
+    @staticmethod
+    def _validate_constructor_parameters(
+        *,
+        hidden_dim: int,
+        embedding_dim: int,
+        gru_layers: int,
+        dropout: float,
+        graph_top_k: int,
+        graph_self_loops: bool,
+        graph_symmetric: bool,
+        graph_heads: int,
+        graph_dropout: float,
+    ) -> None:
+        """
+        Validate all DBRL configuration parameters at construction time.
+        """
+
+        integer_parameters = {
+            "hidden_dim": hidden_dim,
+            "embedding_dim": embedding_dim,
+            "gru_layers": gru_layers,
+            "graph_top_k": graph_top_k,
+            "graph_heads": graph_heads,
+        }
+
+        for name, value in integer_parameters.items():
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise TypeError(
+                    f"{name} must be an integer."
+                )
+
+            if value <= 0:
+                raise ValueError(
+                    f"{name} must be greater than zero."
+                )
+
+        boolean_parameters = {
+            "graph_self_loops": graph_self_loops,
+            "graph_symmetric": graph_symmetric,
+        }
+
+        for name, value in boolean_parameters.items():
+            if not isinstance(value, bool):
+                raise TypeError(
+                    f"{name} must be a boolean."
+                )
+
+        probability_parameters = {
+            "dropout": dropout,
+            "graph_dropout": graph_dropout,
+        }
+
+        for name, value in probability_parameters.items():
+            if (
+                not isinstance(value, (float, int))
+                or isinstance(value, bool)
+            ):
+                raise TypeError(
+                    f"{name} must be a floating-point value."
+                )
+
+            if not 0.0 <= float(value) < 1.0:
+                raise ValueError(
+                    f"{name} must satisfy "
+                    f"0.0 <= {name} < 1.0."
+                )
 
     def _encode_temporal_behavior(
         self,
@@ -158,9 +242,10 @@ class DBRL(nn.Module):
         # ---------------------------------------------------------
         _, hidden = self.temporal_encoder(x)
 
+        # ---------------------------------------------------------
         # Last layer of the GRU.
         #
-        # hidden shape:
+        # hidden:
         # (gru_layers, B*N, hidden_dim)
         #
         # ↓
@@ -254,8 +339,8 @@ class DBRL(nn.Module):
         Returns
         -------
         Tensor
-            Contextualized device behavioral representations with
-            shape ``(B, N, embedding_dim)``.
+            Contextualized device behavioral representations with shape
+            ``(B, N, embedding_dim)``.
         """
 
         self._validate_input(x)

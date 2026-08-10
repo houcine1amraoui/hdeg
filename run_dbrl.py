@@ -48,7 +48,7 @@ def load_window_artifact(
     """
 
     print("Loading prepared window artifact...")
-    
+
     path = Path(f"{windows_dir}/{split}.npz")
 
     if not path.is_file():
@@ -470,7 +470,7 @@ def main() -> None:
     print(root)
 
     processed_data_folder = get_processed_folder(config)
-    windows_dir = processed_data_folder
+    windows_dir = f"{processed_data_folder}/windows"
 
     output_dir = f"{processed_data_folder}/dbrl"
     output_path = f"{output_dir}/train_dbrl.pt"

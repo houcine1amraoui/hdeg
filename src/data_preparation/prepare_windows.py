@@ -571,7 +571,10 @@ def main_prepare_windows(config) -> None:
     # ---------------------------------------------------------
     # Construct each requested split.
     # ---------------------------------------------------------
-    for split in arrays:
+
+    splits = ["train", "val", "actor2_test", "actor1_test"]
+
+    for split in splits:
         process_split(
             split=split,
             arrays=arrays,

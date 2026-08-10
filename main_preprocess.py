@@ -1,4 +1,4 @@
-from src.data_preparation.TimeSeriesDataset import main_prepare_windows
+from src.data_preparation.prepare_windows import main_prepare_windows
 from src.data_preparation.data_preparation import preprocessing_pipeline
 from src.utils.save_utils import save_processed_data
 import yaml

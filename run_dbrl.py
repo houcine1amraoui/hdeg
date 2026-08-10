@@ -1,4 +1,5 @@
 from __future__ import annotations
+import argparse
 import yaml
 
 from pathlib import Path
@@ -453,6 +454,18 @@ def main() -> None:
     set_seed(config["seed"])
 
     device = get_device()
+
+    # # parse CLI args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_root_dir", type=str)
+    args = parser.parse_args()
+
+    # override project_root_directory
+    if args.project_root_dir:
+        config["project_root_dir"] = args.project_root_dir
+
+    root = config["project_root_dir"]
+    print(root)
 
     # -------------------------------------------------------------
     # Paths

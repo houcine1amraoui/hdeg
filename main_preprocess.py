@@ -1,3 +1,4 @@
+from src.data_preparation.TimeSeriesDataset import main_prepare_windows
 from src.data_preparation.data_preparation import preprocessing_pipeline
 from src.utils.save_utils import save_processed_data
 import yaml
@@ -29,6 +30,7 @@ def main_preprocess():
     
     save_processed_data(splits_norm, timestamps, scaler, devices, config)
 
+    main_prepare_windows()
     print("Data preprocessing Done.")
 
 if __name__ == "__main__":

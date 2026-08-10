@@ -504,9 +504,7 @@ def process_split(
         window_size=window_size,
     )
 
-    output_path = (
-        output_dir / f"{split}.npz"
-    )
+    output_path = (f"{output_dir}/{split}.npz")
 
     save_window_split(
         output_path=output_path,

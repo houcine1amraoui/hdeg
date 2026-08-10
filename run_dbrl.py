@@ -47,7 +47,7 @@ def load_window_artifact(
         num_devices
     """
 
-    path = windows_dir / f"{split}.npz"
+    path = f"{windows_dir}/{split}.npz"
 
     if not path.is_file():
         raise FileNotFoundError(
@@ -472,20 +472,6 @@ def main() -> None:
 
     output_dir = f"{processed_data_folder}/dbrl"
     output_path = f"{output_dir}/train_dbrl.pt"
-
-    # -------------------------------------------------------------
-    # Header
-    # -------------------------------------------------------------
-
-    print("=" * 70)
-    print("HDEG — DBRL Standalone Execution")
-    print("=" * 70)
-
-    print(
-        f"Windows directory : {windows_dir}"
-    )
-
-    # print(f"Split             : {args.split}")
 
     # -------------------------------------------------------------
     # Load prepared windows

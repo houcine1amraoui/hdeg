@@ -26,9 +26,9 @@ def main_preprocess():
     root = config["project_root_dir"]
     print(root)
     
-    splits_norm, timestamps, scaler, devices = preprocessing_pipeline(config) 
+    # splits_norm, timestamps, scaler, devices = preprocessing_pipeline(config) 
     
-    save_processed_data(splits_norm, timestamps, scaler, devices, config)
+    # save_processed_data(splits_norm, timestamps, scaler, devices, config)
 
     # windows construction
     main_prepare_windows(config)

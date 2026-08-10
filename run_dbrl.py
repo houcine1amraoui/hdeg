@@ -47,6 +47,8 @@ def load_window_artifact(
         num_devices
     """
 
+    print("Loading prepared window artifact...")
+    
     path = Path(f"{windows_dir}/{split}.npz")
 
     if not path.is_file():

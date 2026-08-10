@@ -504,7 +504,7 @@ def process_split(
         window_size=window_size,
     )
 
-    output_path = (
+    output_path = Path(
          f"{output_dir}/{split}.npz"
     )
 
@@ -564,7 +564,7 @@ def process_split(
 
 def main_prepare_windows(config) -> None:
     processed_data_folder = get_processed_folder(config)
-    processed_data_folder = Path(processed_data_folder)
+    # processed_data_folder = Path(processed_data_folder)
     arrays = np.load(f"{processed_data_folder}/arrays.npz")
     timestamps_archive = np.load(f"{processed_data_folder}/timestamps.npz")
     window_size = config["preprocessing"]["window_size"]

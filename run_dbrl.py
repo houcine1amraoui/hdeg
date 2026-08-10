@@ -470,8 +470,7 @@ def main() -> None:
     processed_data_folder = get_processed_folder(config)
     windows_dir = processed_data_folder
 
-    output_dir = processed_data_folder / "dbrl"
-    
+    output_dir = f"{processed_data_folder}/dbrl"
     output_path = f"{output_dir}/train_dbrl.pt"
 
     # -------------------------------------------------------------

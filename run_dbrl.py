@@ -471,7 +471,7 @@ def main() -> None:
     # Paths
     # -------------------------------------------------------------
 
-    processed_data_folder = get_processed_folder()
+    processed_data_folder = get_processed_folder(config)
     windows_dir = processed_data_folder
 
     output_dir = processed_data_folder / "dbrl"

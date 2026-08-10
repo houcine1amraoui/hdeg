@@ -467,20 +467,12 @@ def main() -> None:
     root = config["project_root_dir"]
     print(root)
 
-    # -------------------------------------------------------------
-    # Paths
-    # -------------------------------------------------------------
-
     processed_data_folder = get_processed_folder(config)
     windows_dir = processed_data_folder
 
     output_dir = processed_data_folder / "dbrl"
     
-
-    output_path = (
-        output_dir
-        / f"train_dbrl.pt"
-    )
+    output_path = f"{output_dir}/train_dbrl.pt"
 
     # -------------------------------------------------------------
     # Header

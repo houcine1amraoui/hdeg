@@ -30,7 +30,9 @@ def main_preprocess():
     
     save_processed_data(splits_norm, timestamps, scaler, devices, config)
 
-    main_prepare_windows()
+    # windows construction
+    main_prepare_windows(config)
+
     print("Data preprocessing Done.")
 
 if __name__ == "__main__":

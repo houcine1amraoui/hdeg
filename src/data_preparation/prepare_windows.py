@@ -7,6 +7,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
+from src.utils.get_folders_utils import get_processed_folder
 
 SPLITS = (
     "train",
@@ -561,177 +562,31 @@ def process_split(
     )
 
 
-def main_prepare_windows() -> None:
-    args = parse_args()
+def main_prepare_windows(config) -> None:
+    processed_data_folder = get_processed_folder(config)
 
-    if args.window_size <= 0:
-        raise ValueError(
-            "window_size must be greater than zero."
+    arrays = np.load(f"{processed_data_folder}/arrays.npz")
+    timestamps_archive = np.load(f"{processed_data_folder}/timestamps.npz")
+    window_size = config["preprocessing"]["window_size"]
+    # ---------------------------------------------------------
+    # Construct each requested split.
+    # ---------------------------------------------------------
+    for split in arrays:
+        process_split(
+            split=split,
+            arrays=arrays,
+            timestamps_archive=timestamps_archive,
+            output_dir=processed_data_folder,
+            window_size=window_size,
+            overwrite=True,
         )
-
-    processed_dir = Path(
-        args.processed_dir
-    )
-
-    if not processed_dir.is_dir():
-        raise FileNotFoundError(
-            f"Processed-data directory not found:\n"
-            f"{processed_dir}"
-        )
-
-    arrays_path = (
-        processed_dir / "arrays.npz"
-    )
-
-    timestamps_path = (
-        processed_dir / "timestamps.npz"
-    )
-
-    if not arrays_path.is_file():
-        raise FileNotFoundError(
-            f"Required file not found:\n{arrays_path}"
-        )
-
-    if not timestamps_path.is_file():
-        raise FileNotFoundError(
-            f"Required file not found:\n{timestamps_path}"
-        )
-
-    if args.output_dir is None:
-        output_dir = (
-            processed_dir / "windows"
-        )
-    else:
-        output_dir = Path(
-            args.output_dir
-        )
-
-    output_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    print("=" * 70)
-    print("Sliding Window Preparation")
-    print("=" * 70)
-    print(
-        f"Processed directory : {processed_dir}"
-    )
-    print(
-        f"Window size         : {args.window_size}"
-    )
-    print(
-        f"Output directory    : {output_dir}"
-    )
-    print(
-        f"Splits              : {args.splits}"
-    )
-
-    with np.load(
-        arrays_path,
-        allow_pickle=False,
-    ) as arrays, np.load(
-        timestamps_path,
-        allow_pickle=False,
-    ) as timestamps_archive:
-
-        # ---------------------------------------------------------
-        # Validate the available split structure before processing.
-        # ---------------------------------------------------------
-        missing_array_splits = [
-            split
-            for split in args.splits
-            if split not in arrays.files
-        ]
-
-        if missing_array_splits:
-            raise KeyError(
-                "The following requested splits are missing "
-                f"from arrays.npz: {missing_array_splits}. "
-                f"Available splits: {arrays.files}"
-            )
-
-        missing_timestamp_splits = [
-            split
-            for split in args.splits
-            if split not in timestamps_archive.files
-        ]
-
-        if missing_timestamp_splits:
-            raise KeyError(
-                "The following requested splits are missing "
-                f"from timestamps.npz: "
-                f"{missing_timestamp_splits}. "
-                f"Available splits: "
-                f"{timestamps_archive.files}"
-            )
-
-        # ---------------------------------------------------------
-        # Validate device metadata using the first requested split.
-        # ---------------------------------------------------------
-        first_data = arrays[args.splits[0]]
-
-        if first_data.ndim != 2:
-            raise ValueError(
-                f"Expected {args.splits[0]} to have shape "
-                f"(T, N), received {first_data.shape}."
-            )
-
-        num_devices = first_data.shape[1]
-
-        devices = validate_devices(
-            processed_dir,
-            num_devices,
-        )
-
-        if devices is not None:
-            print(
-                f"Number of devices    : "
-                f"{len(devices)}"
-            )
-
-        # ---------------------------------------------------------
-        # Verify that all selected splits have the same device
-        # dimension.
-        #
-        # HDEG requires a consistent device identity/order across
-        # the experimental splits.
-        # ---------------------------------------------------------
-        for split in args.splits:
-            data = arrays[split]
-
-            if data.ndim != 2:
-                raise ValueError(
-                    f"Split '{split}' must have shape (T, N), "
-                    f"received {data.shape}."
-                )
-
-            if data.shape[1] != num_devices:
-                raise ValueError(
-                    f"Device-count mismatch for split '{split}': "
-                    f"expected N={num_devices}, "
-                    f"received N={data.shape[1]}."
-                )
-
-        # ---------------------------------------------------------
-        # Construct each requested split.
-        # ---------------------------------------------------------
-        for split in args.splits:
-            process_split(
-                split=split,
-                arrays=arrays,
-                timestamps_archive=timestamps_archive,
-                output_dir=output_dir,
-                window_size=args.window_size,
-                overwrite=args.overwrite,
-            )
 
     print()
     print("=" * 70)
     print("Window preparation completed successfully.")
     print("=" * 70)
     print(
-        f"Window files saved under:\n{output_dir}"
+        f"Window files saved under:\n{processed_data_folder}"
     )
 
 

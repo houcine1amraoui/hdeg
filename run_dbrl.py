@@ -47,7 +47,7 @@ def load_window_artifact(
         num_devices
     """
 
-    path = f"{windows_dir}/{split}.npz"
+    path = Path(f"{windows_dir}/{split}.npz")
 
     if not path.is_file():
         raise FileNotFoundError(

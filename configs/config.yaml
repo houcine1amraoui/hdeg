@@ -6,6 +6,7 @@ seed: 42
 
 preprocessing:
   dataset_folder: data
+  merge_bre_cu: false # true or false
   dataset_name: CU # CU or BRE
   val_ratio: 0.1
   window_size: 30

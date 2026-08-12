@@ -782,7 +782,7 @@ def main() -> None:
     print("=" * 70)
 
     print(
-        f"Split              : {args.split}"
+        f"Split              : train"
     )
 
     print(

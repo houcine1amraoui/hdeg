@@ -668,23 +668,19 @@ def main() -> None:
     # CLI arguments
     # -------------------------------------------------------------
 
-    max_batches = config["hdeg"]["dbrl"].get(
-        "max_batches"
-    )
+    
 
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run the frozen HDEG DBRL module on sharded "
-            "window-to-window artifacts."
-        )
-    )
+    # # parse CLI args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_root_dir", type=str)
+    args = parser.parse_args()
 
-    parser.add_argument(
-        "--project_root_dir",
-        type=str,
-        default=None,
-        help="Override project_root_dir from config.yaml.",
-    )
+    # override project_root_directory
+    if args.project_root_dir:
+        config["project_root_dir"] = args.project_root_dir
+
+    root = config["project_root_dir"]
+    print(root)
 
     parser.add_argument(
         "--split",
@@ -694,56 +690,23 @@ def main() -> None:
         help="Window split to process.",
     )
 
-    parser.add_argument(
-        "--max_shards",
-        type=int,
-        default=None,
-        help=(
-            "Process at most this many shards. "
-            "Useful for a DBRL smoke test."
-        ),
-    )
+    batch_size = config["hdeg"]["dbrl"]["batch_size"]
+    
+    max_batches = config["hdeg"]["dbrl"]["max_batches"]
 
-    # parser.add_argument(
-    #     "--max_batches",
-    #     type=int,
-    #     default=None,
-    #     help=(
-    #         "Process at most this many batches per shard. "
-    #         "Overrides config hdeg.dbrl.max_batches."
-    #     ),
-    # )
+    max_shards = config["hdeg"]["dbrl"]["max_shards"]
 
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=None,
-        help=(
-            "DBRL batch size override. Defaults to "
-            "config hdeg.dbrl.batch_size."
-        ),
-    )
-
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Overwrite existing DBRL representation shards.",
-    )
-
-    args = parser.parse_args()
-
-    if args.project_root_dir:
-        config["project_root_dir"] = args.project_root_dir
-
-    if args.max_shards is not None and args.max_shards <= 0:
+    overwrite = config["hdeg"]["dbrl"]["overwrite"]
+    
+    if max_shards is not None and max_shards <= 0:
         raise ValueError(
             "max_shards must be greater than zero."
         )
 
-    # if args.max_batches is not None and args.max_batches <= 0:
-    #     raise ValueError(
-    #         "max_batches must be greater than zero."
-    #     )
+    if max_batches is not None and max_batches <= 0:
+        raise ValueError(
+            "max_batches must be greater than zero."
+        )
 
     # -------------------------------------------------------------
     # Paths
@@ -803,21 +766,9 @@ def main() -> None:
         config["hdeg"]["dbrl"]["embedding_dim"]
     )
 
-    batch_size = (
-        args.batch_size
-        if args.batch_size is not None
-        else int(
-            config["hdeg"]["dbrl"]["batch_size"]
-        )
-    )
+    batch_size = config["hdeg"]["dbrl"]["batch_size"]
 
-    max_batches = (
-        args.max_batches
-        if args.max_batches is not None
-        else config["hdeg"]["dbrl"].get(
-            "max_batches"
-        )
-    )
+    max_batches = config["hdeg"]["dbrl"]["max_batches"]
 
     if batch_size <= 0:
         raise ValueError(

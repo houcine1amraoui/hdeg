@@ -48,6 +48,8 @@ hdeg:
     graph_symmetric: True
     graph_heads: 1
     max_batches: None
+    max_shards: None
+    overwrite: False
 
 training:
   model: mtad_gat

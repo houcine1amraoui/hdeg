@@ -871,9 +871,9 @@ def main() -> None:
 
     shard_entries = manifest["shards"]
 
-    if args.max_shards is not None:
+    if max_shards is not None:
         shard_entries = shard_entries[
-            :args.max_shards
+            :max_shards
         ]
 
     total_processed = 0
@@ -901,7 +901,7 @@ def main() -> None:
 
         artifact = load_window_shard(
             shard_path=shard_path,
-            expected_split=args.split,
+            expected_split="train",
             expected_window_size=window_size,
             expected_num_devices=num_devices,
         )
@@ -1014,7 +1014,7 @@ def main() -> None:
         save_representations_kwargs = {
             "output_path": output_path,
             "Z": Z,
-            "split": args.split,
+            "split": "train",
             "source_shard": manifest_entry,
             "shard_index": shard_index,
             "start_index": start_index,
@@ -1027,7 +1027,7 @@ def main() -> None:
             "batch_size": batch_size,
             "seed": int(config["seed"]),
             "overwrite": (
-                args.overwrite
+                overwrite
                 or bool(
                     config["hdeg"]["dbrl"].get(
                         "overwrite",
@@ -1074,8 +1074,8 @@ def main() -> None:
 
         # A partial smoke test intentionally stops here if requested.
         if (
-            args.max_shards is not None
-            and sequence_index + 1 >= args.max_shards
+            max_shards is not None
+            and sequence_index + 1 >= max_shards
         ):
             break
 
@@ -1104,7 +1104,7 @@ def main() -> None:
         f"Expected total     : {num_samples}"
     )
 
-    if args.max_shards is None and max_batches is None:
+    if max_shards is None and max_batches is None:
         if total_processed != num_samples:
             raise RuntimeError(
                 "Complete DBRL execution did not process the "

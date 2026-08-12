@@ -668,6 +668,10 @@ def main() -> None:
     # CLI arguments
     # -------------------------------------------------------------
 
+    max_batches = config["hdeg"]["dbrl"].get(
+        "max_batches"
+    )
+
     parser = argparse.ArgumentParser(
         description=(
             "Run the frozen HDEG DBRL module on sharded "
@@ -700,15 +704,15 @@ def main() -> None:
         ),
     )
 
-    parser.add_argument(
-        "--max_batches",
-        type=int,
-        default=None,
-        help=(
-            "Process at most this many batches per shard. "
-            "Overrides config hdeg.dbrl.max_batches."
-        ),
-    )
+    # parser.add_argument(
+    #     "--max_batches",
+    #     type=int,
+    #     default=None,
+    #     help=(
+    #         "Process at most this many batches per shard. "
+    #         "Overrides config hdeg.dbrl.max_batches."
+    #     ),
+    # )
 
     parser.add_argument(
         "--batch_size",

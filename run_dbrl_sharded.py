@@ -737,7 +737,7 @@ def main() -> None:
 
     manifest = load_manifest(
         windows_dir=windows_dir,
-        split=args.split,
+        split="train",
     )
 
     num_devices = int(

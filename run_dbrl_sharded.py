@@ -718,7 +718,7 @@ def main() -> None:
         processed_data_folder
     ) / "windows"
 
-    split_dir = f"{windows_dir}/train"
+    split_dir = Path(f"{windows_dir}/train")
 
     output_dir = (
         Path(processed_data_folder)

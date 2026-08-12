@@ -39,7 +39,7 @@ class TimeSeriesDataset(Dataset):
 
     def __len__(self):
         # Need one complete future window
-        return self.T - self.window_size - 1
+        return self.T - self.window_size
 
     def __getitem__(self, idx):
 

@@ -1,4 +1,4 @@
-from src.data_preparation.prepare_windows import main_prepare_windows
+from src.data_preparation.prepare_windows_sharded import main_prepare_windows
 from src.data_preparation.data_preparation import preprocessing_pipeline
 from src.utils.save_utils import save_processed_data
 import yaml
@@ -26,9 +26,9 @@ def main_preprocess():
     root = config["project_root_dir"]
     print(root)
     
-    # splits_norm, timestamps, scaler, devices = preprocessing_pipeline(config) 
+    splits_norm, timestamps, scaler, devices = preprocessing_pipeline(config) 
     
-    # save_processed_data(splits_norm, timestamps, scaler, devices, config)
+    save_processed_data(splits_norm, timestamps, scaler, devices, config)
 
     # windows construction
     main_prepare_windows(config)

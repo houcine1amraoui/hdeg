@@ -13,6 +13,7 @@ preprocessing:
   downsample_freq: 1s
   val_ratio: 0.1
   window_size: 30
+  window_shard_size: 8192
   actors_timelines:
     actor1_t1_start: "2022-10-18 00:00:00"
     actor1_t1_end: "2022-11-07 23:59:59"

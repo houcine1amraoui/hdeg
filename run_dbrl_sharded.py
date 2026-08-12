@@ -826,7 +826,7 @@ def main() -> None:
     )
 
     print(
-        f"Max shards         : {args.max_shards}"
+        f"Max shards         : {max_shards}"
     )
 
     print(

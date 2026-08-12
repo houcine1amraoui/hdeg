@@ -740,10 +740,10 @@ def main() -> None:
             "max_shards must be greater than zero."
         )
 
-    if args.max_batches is not None and args.max_batches <= 0:
-        raise ValueError(
-            "max_batches must be greater than zero."
-        )
+    # if args.max_batches is not None and args.max_batches <= 0:
+    #     raise ValueError(
+    #         "max_batches must be greater than zero."
+    #     )
 
     # -------------------------------------------------------------
     # Paths

@@ -11,35 +11,13 @@ import torch
 import yaml
 
 
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-
 class BehavioralStateConfigError(ValueError):
-    """
-    Raised when the behavioral-state configuration is structurally or
-    semantically invalid.
-    """
-
-
-# ---------------------------------------------------------------------------
-# Data structures
-# ---------------------------------------------------------------------------
+    """Raised when the BSE behavioral-state configuration is invalid."""
 
 
 @dataclass(frozen=True)
 class BehavioralDevice:
-    """
-    One selected device feature and its fixed column index.
-
-    Parameters
-    ----------
-    index:
-        Column index in the HDEG input representation.
-    device_id:
-        Exact device/feature identifier from devices.json.
-    """
+    """A selected device feature with its fixed input-column index."""
 
     index: int
     device_id: str
@@ -47,26 +25,7 @@ class BehavioralDevice:
 
 @dataclass(frozen=True)
 class BehavioralState:
-    """
-    One behavioral state defined by the BSE semantic configuration.
-
-    Parameters
-    ----------
-    id:
-        Stable machine-readable identifier.
-    index:
-        Row index in the compatibility matrix.
-    name:
-        Human-readable behavioral-state name.
-    compatible_device_indices:
-        Device-column indices allowed to contribute to this state.
-    rationale:
-        Semantic justification for the compatibility assignment.
-    provenance_type:
-        Provenance classification for the assignment.
-    confidence:
-        Semantic adjudication confidence.
-    """
+    """A validated behavioral state and its compatible device columns."""
 
     id: str
     index: int
@@ -80,28 +39,19 @@ class BehavioralState:
 @dataclass(frozen=True)
 class BehavioralStateConfiguration:
     """
-    Validated HDEG behavioral-state semantic configuration.
+    Fully validated BSE semantic configuration.
 
-    This object is deliberately independent of the BSE neural module.
-
-    The configuration defines:
-        - the fixed device-column ordering;
-        - the behavioral-state ordering;
-        - the binary compatibility matrix;
-        - semantic provenance metadata.
-
-    BSE consumes only the resulting compatibility tensor.
+    This object is configuration infrastructure. It does not implement
+    semantic attention or any neural computation.
     """
 
     schema_version: str
     artifact_type: str
     status: str
-
     dataset_name: str
 
     devices: tuple[BehavioralDevice, ...]
     states: tuple[BehavioralState, ...]
-
     compatibility_matrix: np.ndarray
 
     compatibility_relation: str
@@ -109,17 +59,14 @@ class BehavioralStateConfiguration:
 
     @property
     def num_devices(self) -> int:
-        """Number of selected device features."""
         return len(self.devices)
 
     @property
     def num_states(self) -> int:
-        """Number of behavioral states."""
         return len(self.states)
 
     @property
     def matrix_shape(self) -> tuple[int, int]:
-        """Shape of the compatibility matrix."""
         return tuple(self.compatibility_matrix.shape)
 
     def torch_mask(
@@ -130,21 +77,10 @@ class BehavioralStateConfiguration:
         clone: bool = True,
     ) -> torch.Tensor:
         """
-        Return the compatibility matrix as a PyTorch tensor.
+        Return the validated compatibility matrix as a PyTorch tensor.
 
-        Parameters
-        ----------
-        dtype:
-            Tensor dtype. BSE normally uses float32.
-        device:
-            Optional target device.
-        clone:
-            Whether to return an independent tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Tensor with shape (K, N).
+        Shape:
+            (K, N)
         """
         tensor = torch.from_numpy(
             self.compatibility_matrix
@@ -153,36 +89,25 @@ class BehavioralStateConfiguration:
             device=device,
         )
 
-        if clone:
-            tensor = tensor.clone()
-
-        return tensor
+        return tensor.clone() if clone else tensor
 
     def device_ids(self) -> tuple[str, ...]:
-        """Return device identifiers in the exact matrix-column order."""
         return tuple(
             device.device_id
             for device in self.devices
         )
 
     def state_ids(self) -> tuple[str, ...]:
-        """Return behavioral-state identifiers in matrix-row order."""
         return tuple(
             state.id
             for state in self.states
         )
 
     def state_names(self) -> tuple[str, ...]:
-        """Return behavioral-state names in matrix-row order."""
         return tuple(
             state.name
             for state in self.states
         )
-
-
-# ---------------------------------------------------------------------------
-# Public loader
-# ---------------------------------------------------------------------------
 
 
 def load_behavioral_state_config(
@@ -190,7 +115,7 @@ def load_behavioral_state_config(
     devices_path: str | Path,
 ) -> BehavioralStateConfiguration:
     """
-    Load and validate the HDEG behavioral-state configuration.
+    Load and fully validate the behavioral-state configuration.
 
     Parameters
     ----------
@@ -198,59 +123,49 @@ def load_behavioral_state_config(
         Path to behavioral_states.yaml.
 
     devices_path:
-        Path to the authoritative devices.json file.
+        Path to the authoritative devices.json.
 
     Returns
     -------
     BehavioralStateConfiguration
-        Fully validated semantic configuration.
-
-    Raises
-    ------
-    FileNotFoundError
-        If either input file does not exist.
-
-    BehavioralStateConfigError
-        If the configuration violates the semantic/configuration contract.
+        Validated configuration suitable for BSE.
     """
     config_path = Path(config_path)
     devices_path = Path(devices_path)
 
     if not config_path.is_file():
         raise FileNotFoundError(
-            f"Behavioral-state configuration not found: "
-            f"{config_path}"
+            f"Behavioral-state configuration not found: {config_path}"
         )
 
     if not devices_path.is_file():
         raise FileNotFoundError(
-            f"Device-order file not found: "
-            f"{devices_path}"
+            f"Device-order file not found: {devices_path}"
         )
 
     config = _load_yaml(config_path)
     device_ids = _load_devices_json(devices_path)
 
-    return _build_and_validate_configuration(
+    return _parse_configuration(
         config=config,
         device_ids=device_ids,
     )
 
 
-# ---------------------------------------------------------------------------
-# File loading
-# ---------------------------------------------------------------------------
+def validate_behavioral_state_config(
+    config_path: str | Path,
+    devices_path: str | Path,
+) -> BehavioralStateConfiguration:
+    """Explicit validation alias for load_behavioral_state_config()."""
+    return load_behavioral_state_config(
+        config_path=config_path,
+        devices_path=devices_path,
+    )
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    """
-    Load the YAML configuration document.
-    """
     try:
-        with path.open(
-            "r",
-            encoding="utf-8",
-        ) as file:
+        with path.open("r", encoding="utf-8") as file:
             data = yaml.safe_load(file)
     except yaml.YAMLError as exc:
         raise BehavioralStateConfigError(
@@ -259,46 +174,39 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise BehavioralStateConfigError(
-            "Behavioral-state configuration must contain "
-            "a top-level mapping."
+            "Behavioral-state configuration must be a mapping."
         )
 
     return data
 
 
-def _load_devices_json(path: Path) -> tuple[str, ...]:
-    """
-    Load the authoritative selected-device ordering.
-    """
+def _load_devices_json(
+    path: Path,
+) -> tuple[str, ...]:
     try:
-        with path.open(
-            "r",
-            encoding="utf-8",
-        ) as file:
+        with path.open("r", encoding="utf-8") as file:
             data = json.load(file)
     except json.JSONDecodeError as exc:
         raise BehavioralStateConfigError(
-            f"Invalid JSON device-order file: {path}"
+            f"Invalid devices.json: {path}"
         ) from exc
 
     if not isinstance(data, list):
         raise BehavioralStateConfigError(
-            "devices.json must contain a JSON list."
+            "devices.json must contain a list."
         )
 
     if not data:
         raise BehavioralStateConfigError(
-            "devices.json contains no devices."
+            "devices.json must not be empty."
         )
 
     if not all(
-        isinstance(device_id, str)
-        and device_id.strip()
-        for device_id in data
+        isinstance(item, str) and item.strip()
+        for item in data
     ):
         raise BehavioralStateConfigError(
-            "Every device entry in devices.json must be "
-            "a non-empty string."
+            "Every devices.json entry must be a non-empty string."
         )
 
     if len(set(data)) != len(data):
@@ -309,19 +217,11 @@ def _load_devices_json(path: Path) -> tuple[str, ...]:
     return tuple(data)
 
 
-# ---------------------------------------------------------------------------
-# Configuration construction
-# ---------------------------------------------------------------------------
-
-
-def _build_and_validate_configuration(
+def _parse_configuration(
     *,
     config: dict[str, Any],
     device_ids: tuple[str, ...],
 ) -> BehavioralStateConfiguration:
-    """
-    Parse the YAML document and validate the complete semantic contract.
-    """
 
     schema_version = _require_string(
         config,
@@ -341,10 +241,11 @@ def _build_and_validate_configuration(
         "top-level",
     )
 
-    if artifact_type != "hdeg_behavioral_state_configuration":
+    if artifact_type != (
+        "hdeg_behavioral_state_configuration"
+    ):
         raise BehavioralStateConfigError(
-            "Unexpected artifact_type: "
-            f"{artifact_type!r}."
+            f"Unexpected artifact_type: {artifact_type!r}."
         )
 
     dataset = _require_mapping(
@@ -368,32 +269,31 @@ def _build_and_validate_configuration(
     if selected_device_count != len(device_ids):
         raise BehavioralStateConfigError(
             "Device-count mismatch: "
-            f"configuration declares {selected_device_count}, "
-            f"but devices.json contains {len(device_ids)}."
+            f"configuration={selected_device_count}, "
+            f"devices.json={len(device_ids)}."
         )
 
-    device_order_source = _require_string(
+    order_source = _require_string(
         dataset,
         "device_order_source",
         "dataset",
     )
 
-    if device_order_source != "devices.json":
+    if order_source != "devices.json":
         raise BehavioralStateConfigError(
-            "The behavioral-state configuration must use "
-            '"devices.json" as its device-order source.'
+            "device_order_source must be 'devices.json'."
         )
 
-    device_ordering_rule = _require_string(
+    ordering_rule = _require_string(
         dataset,
         "device_ordering_rule",
         "dataset",
     )
 
-    if device_ordering_rule != "exact_file_order":
+    if ordering_rule != "exact_file_order":
         raise BehavioralStateConfigError(
-            "Unsupported device ordering rule: "
-            f"{device_ordering_rule!r}."
+            "device_ordering_rule must be "
+            "'exact_file_order'."
         )
 
     semantic_policy = _require_mapping(
@@ -424,21 +324,16 @@ def _build_and_validate_configuration(
             "Version 1.0 requires contextual_edges='none'."
         )
 
-    state_entries = config.get("behavioral_states")
+    states_raw = config.get("behavioral_states")
 
-    if not isinstance(state_entries, list):
+    if not isinstance(states_raw, list) or not states_raw:
         raise BehavioralStateConfigError(
-            "'behavioral_states' must be a list."
-        )
-
-    if not state_entries:
-        raise BehavioralStateConfigError(
-            "'behavioral_states' must not be empty."
+            "behavioral_states must be a non-empty list."
         )
 
     states = _parse_states(
-        state_entries=state_entries,
-        num_devices=len(device_ids),
+        states_raw=states_raw,
+        device_ids=device_ids,
     )
 
     matrix_section = _require_mapping(
@@ -449,8 +344,8 @@ def _build_and_validate_configuration(
 
     matrix = _parse_matrix(
         matrix_section=matrix_section,
-        expected_num_states=len(states),
-        expected_num_devices=len(device_ids),
+        num_states=len(states),
+        num_devices=len(device_ids),
     )
 
     devices = tuple(
@@ -480,71 +375,75 @@ def _build_and_validate_configuration(
     return configuration
 
 
-# ---------------------------------------------------------------------------
-# State parsing
-# ---------------------------------------------------------------------------
-
-
 def _parse_states(
     *,
-    state_entries: list[Any],
-    num_devices: int,
+    states_raw: list[Any],
+    device_ids: tuple[str, ...],
 ) -> list[BehavioralState]:
-    """
-    Parse and validate behavioral-state definitions.
-    """
 
     states: list[BehavioralState] = []
+    state_ids: set[str] = set()
 
     for expected_index, raw_state in enumerate(
-        state_entries
+        states_raw
     ):
         if not isinstance(raw_state, dict):
             raise BehavioralStateConfigError(
-                "Each behavioral state must be a mapping."
+                f"behavioral_states[{expected_index}] "
+                "must be a mapping."
             )
+
+        context = (
+            f"behavioral_states[{expected_index}]"
+        )
 
         state_id = _require_string(
             raw_state,
             "id",
-            f"behavioral_states[{expected_index}]",
+            context,
         )
 
-        name = _require_string(
-            raw_state,
-            "name",
-            f"behavioral_states[{expected_index}]",
-        )
+        if state_id in state_ids:
+            raise BehavioralStateConfigError(
+                f"Duplicate behavioral-state id: {state_id!r}."
+            )
+
+        state_ids.add(state_id)
 
         index = _require_int(
             raw_state,
             "index",
-            f"behavioral_states[{expected_index}]",
+            context,
         )
 
         if index != expected_index:
             raise BehavioralStateConfigError(
-                "Behavioral-state indices must be contiguous "
-                f"and ordered. Expected {expected_index}, "
-                f"received {index} for state {state_id!r}."
+                f"{context}.index={index}; expected "
+                f"{expected_index}."
             )
+
+        name = _require_string(
+            raw_state,
+            "name",
+            context,
+        )
 
         rationale = _require_string(
             raw_state,
             "rationale",
-            f"behavioral_states[{expected_index}]",
+            context,
         )
 
         provenance_type = _require_string(
             raw_state,
             "provenance_type",
-            f"behavioral_states[{expected_index}]",
+            context,
         )
 
         confidence = _require_string(
             raw_state,
             "confidence",
-            f"behavioral_states[{expected_index}]",
+            context,
         )
 
         if confidence not in {
@@ -557,86 +456,84 @@ def _parse_states(
                 f"for state {state_id!r}."
             )
 
-        compatible_entries = raw_state.get(
+        compatible_raw = raw_state.get(
             "compatible_devices"
         )
 
         if not isinstance(
-            compatible_entries,
+            compatible_raw,
             list,
-        ):
+        ) or not compatible_raw:
             raise BehavioralStateConfigError(
-                f"'compatible_devices' must be a list "
-                f"for state {state_id!r}."
-            )
-
-        if not compatible_entries:
-            raise BehavioralStateConfigError(
-                f"State {state_id!r} has no compatible devices."
+                f"{context}.compatible_devices must be "
+                "a non-empty list."
             )
 
         compatible_indices: list[int] = []
 
-        for entry_index, raw_device in enumerate(
-            compatible_entries
+        for device_entry_index, raw_device in enumerate(
+            compatible_raw
         ):
+            device_context = (
+                f"{context}.compatible_devices"
+                f"[{device_entry_index}]"
+            )
+
             if not isinstance(
                 raw_device,
                 dict,
             ):
                 raise BehavioralStateConfigError(
-                    f"Invalid compatible-device entry "
-                    f"{entry_index} for state {state_id!r}."
+                    f"{device_context} must be a mapping."
                 )
 
             device_index = _require_int(
                 raw_device,
                 "index",
-                (
-                    f"behavioral_states[{expected_index}]"
-                    f".compatible_devices[{entry_index}]"
-                ),
+                device_context,
             )
 
-            device_id = _require_string(
+            if not (
+                0 <= device_index < len(device_ids)
+            ):
+                raise BehavioralStateConfigError(
+                    f"{device_context}.index={device_index} "
+                    f"is outside [0, {len(device_ids) - 1}]."
+                )
+
+            declared_device_id = _require_string(
                 raw_device,
                 "id",
-                (
-                    f"behavioral_states[{expected_index}]"
-                    f".compatible_devices[{entry_index}]"
-                ),
+                device_context,
             )
+
+            expected_device_id = device_ids[
+                device_index
+            ]
+
+            if declared_device_id != expected_device_id:
+                raise BehavioralStateConfigError(
+                    f"{device_context}.id does not match "
+                    "devices.json ordering: "
+                    f"declared={declared_device_id!r}, "
+                    f"expected={expected_device_id!r}."
+                )
 
             relation = _require_string(
                 raw_device,
                 "relation",
-                (
-                    f"behavioral_states[{expected_index}]"
-                    f".compatible_devices[{entry_index}]"
-                ),
+                device_context,
             )
 
             if relation != "DIRECT":
                 raise BehavioralStateConfigError(
-                    f"State {state_id!r}, device "
-                    f"{device_index}: relation must be "
+                    f"{device_context}.relation must be "
                     "'DIRECT' in Version 1.0."
-                )
-
-            if not 0 <= device_index < num_devices:
-                raise BehavioralStateConfigError(
-                    f"State {state_id!r} references invalid "
-                    f"device index {device_index}."
                 )
 
             compatible_indices.append(
                 device_index
             )
-
-            # The actual device-id correspondence is
-            # validated later against devices.json.
-
-            _ = device_id
 
         if len(
             set(compatible_indices)
@@ -660,58 +557,30 @@ def _parse_states(
             )
         )
 
-    state_ids = [
-        state.id
-        for state in states
-    ]
-
-    if len(set(state_ids)) != len(state_ids):
-        raise BehavioralStateConfigError(
-            "Behavioral-state identifiers must be unique."
-        )
-
     return states
-
-
-# ---------------------------------------------------------------------------
-# Matrix parsing
-# ---------------------------------------------------------------------------
 
 
 def _parse_matrix(
     *,
     matrix_section: dict[str, Any],
-    expected_num_states: int,
-    expected_num_devices: int,
+    num_states: int,
+    num_devices: int,
 ) -> np.ndarray:
-    """
-    Parse the explicit compatibility matrix and validate its shape/value type.
-    """
 
     shape = matrix_section.get("shape")
 
-    if not isinstance(shape, list) or len(shape) != 2:
-        raise BehavioralStateConfigError(
-            "matrix.shape must be a two-element list."
-        )
-
     if shape != [
-        expected_num_states,
-        expected_num_devices,
+        num_states,
+        num_devices,
     ]:
         raise BehavioralStateConfigError(
-            "Matrix shape mismatch: "
-            f"declared={shape}, "
-            f"expected="
-            f"[{expected_num_states}, "
-            f"{expected_num_devices}]."
+            "Declared matrix shape does not match "
+            f"expected [{num_states}, {num_devices}]."
         )
 
-    dtype = matrix_section.get("dtype")
-
-    if dtype != "uint8":
+    if matrix_section.get("dtype") != "uint8":
         raise BehavioralStateConfigError(
-            "Version 1.0 requires matrix.dtype='uint8'."
+            "Matrix dtype must be 'uint8'."
         )
 
     rows = matrix_section.get("rows")
@@ -721,9 +590,9 @@ def _parse_matrix(
             "matrix.rows must be a list."
         )
 
-    if len(rows) != expected_num_states:
+    if len(rows) != num_states:
         raise BehavioralStateConfigError(
-            "Number of matrix rows does not match "
+            "Matrix row count does not match "
             "the number of behavioral states."
         )
 
@@ -733,11 +602,10 @@ def _parse_matrix(
                 f"Matrix row {row_index} must be a list."
             )
 
-        if len(row) != expected_num_devices:
+        if len(row) != num_devices:
             raise BehavioralStateConfigError(
-                f"Matrix row {row_index} has length "
-                f"{len(row)}; expected "
-                f"{expected_num_devices}."
+                f"Matrix row {row_index} must contain "
+                f"{num_devices} entries."
             )
 
     matrix = np.asarray(
@@ -749,147 +617,95 @@ def _parse_matrix(
         np.isin(matrix, [0, 1])
     ):
         raise BehavioralStateConfigError(
-            "Compatibility matrix must contain "
-            "only binary values 0 and 1."
+            "Compatibility matrix must contain only "
+            "0 and 1."
         )
 
     return matrix
 
 
-# ---------------------------------------------------------------------------
-# Complete semantic validation
-# ---------------------------------------------------------------------------
-
-
 def _validate_configuration(
     configuration: BehavioralStateConfiguration,
 ) -> None:
-    """
-    Validate the complete configuration contract.
-
-    This validation intentionally checks both representations:
-
-        behavioral_states[*].compatible_device_indices
-
-    and
-
-        matrix.rows
-
-    so that the semantic declaration and executable matrix cannot silently
-    diverge.
-    """
-
-    matrix = configuration.compatibility_matrix
 
     K = configuration.num_states
     N = configuration.num_devices
+    matrix = configuration.compatibility_matrix
 
     if matrix.shape != (K, N):
         raise BehavioralStateConfigError(
-            "Final compatibility matrix shape mismatch: "
-            f"{matrix.shape} != ({K}, {N})."
+            f"Matrix shape {matrix.shape} does not match "
+            f"(K={K}, N={N})."
         )
 
     # ---------------------------------------------------------------
-    # State-to-matrix consistency
+    # Semantic declarations must exactly reproduce the matrix.
     # ---------------------------------------------------------------
 
     for state in configuration.states:
-        expected_columns = set(
+
+        declared = set(
             state.compatible_device_indices
         )
 
-        actual_columns = set(
+        actual = set(
             np.flatnonzero(
                 matrix[state.index]
             ).tolist()
         )
 
-        if actual_columns != expected_columns:
+        if declared != actual:
             raise BehavioralStateConfigError(
-                f"Compatibility mismatch for state "
-                f"{state.id!r}: semantic declaration "
-                f"{sorted(expected_columns)} != matrix "
-                f"{sorted(actual_columns)}."
+                f"State {state.id!r} declaration does not "
+                "match its matrix row: "
+                f"declared={sorted(declared)}, "
+                f"matrix={sorted(actual)}."
             )
 
     # ---------------------------------------------------------------
-    # Every state must have at least one compatible device.
+    # Every behavioral state must have at least one compatible device.
     # ---------------------------------------------------------------
 
-    row_counts = matrix.sum(
-        axis=1
-    )
+    row_counts = matrix.sum(axis=1)
 
     if not np.all(row_counts > 0):
-        invalid_states = np.flatnonzero(
+        invalid = np.flatnonzero(
             row_counts == 0
         ).tolist()
 
         raise BehavioralStateConfigError(
-            "Some behavioral states have no compatible "
-            f"devices: {invalid_states}."
+            "States without compatible devices: "
+            f"{invalid}."
         )
 
     # ---------------------------------------------------------------
     # Version 1.0 semantic partition:
-    #
-    # every selected device belongs to exactly one primary state.
+    # every selected feature has exactly one primary state.
     # ---------------------------------------------------------------
 
-    column_counts = matrix.sum(
-        axis=0
-    )
+    column_counts = matrix.sum(axis=0)
 
-    if not np.all(
-        column_counts == 1
-    ):
-        invalid_devices = np.flatnonzero(
+    if not np.all(column_counts == 1):
+        invalid = np.flatnonzero(
             column_counts != 1
         ).tolist()
 
         raise BehavioralStateConfigError(
             "Every selected device must belong to exactly "
-            "one primary behavioral state in Version 1.0. "
-            f"Invalid device columns: {invalid_devices}."
+            "one primary behavioral state. Invalid columns: "
+            f"{invalid}."
         )
 
     # ---------------------------------------------------------------
-    # Device IDs embedded in YAML must agree with devices.json.
+    # Final binary invariant.
     # ---------------------------------------------------------------
-
-    # Re-read the device IDs from the configuration entries is not
-    # necessary here because BehavioralDevice is constructed from
-    # devices.json. The explicit mapping is therefore validated at
-    # load time by _validate_declared_device_ids().
-    #
-    # This method is invoked separately below when the raw YAML is
-    # available.
-
-    # ---------------------------------------------------------------
-    # Binary matrix
-    # ---------------------------------------------------------------
-
-    if not np.issubdtype(
-        matrix.dtype,
-        np.integer,
-    ):
-        raise BehavioralStateConfigError(
-            "Compatibility matrix must use an integer dtype."
-        )
 
     if not np.all(
         np.isin(matrix, [0, 1])
     ):
         raise BehavioralStateConfigError(
-            "Compatibility matrix contains values "
-            "other than 0 and 1."
+            "Compatibility matrix is not binary."
         )
-
-
-# ---------------------------------------------------------------------------
-# Primitive field helpers
-# ---------------------------------------------------------------------------
 
 
 def _require_mapping(
@@ -897,9 +713,7 @@ def _require_mapping(
     key: str,
     context: str,
 ) -> dict[str, Any]:
-    """
-    Require a mapping-valued field.
-    """
+
     value = mapping.get(key)
 
     if not isinstance(value, dict):
@@ -915,9 +729,7 @@ def _require_string(
     key: str,
     context: str,
 ) -> str:
-    """
-    Require a non-empty string field.
-    """
+
     value = mapping.get(key)
 
     if not isinstance(value, str):
@@ -940,12 +752,7 @@ def _require_int(
     key: str,
     context: str,
 ) -> int:
-    """
-    Require an integer field.
 
-    bool is deliberately rejected because bool is a subclass of int
-    in Python.
-    """
     value = mapping.get(key)
 
     if isinstance(value, bool) or not isinstance(
@@ -957,26 +764,6 @@ def _require_int(
         )
 
     return value
-
-
-# ---------------------------------------------------------------------------
-# Optional strict validation against raw YAML device IDs
-# ---------------------------------------------------------------------------
-
-
-def validate_behavioral_state_config(
-    config_path: str | Path,
-    devices_path: str | Path,
-) -> BehavioralStateConfiguration:
-    """
-    Public alias emphasizing that loading includes full validation.
-
-    This is intentionally equivalent to load_behavioral_state_config().
-    """
-    return load_behavioral_state_config(
-        config_path=config_path,
-        devices_path=devices_path,
-    )
 
 
 __all__ = [

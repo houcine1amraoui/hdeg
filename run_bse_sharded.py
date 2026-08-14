@@ -760,8 +760,6 @@ def main() -> None:
     
     max_shards = config["hdeg"]["bse"].get("max_shards", None)
 
-    max_shards = args.max_shards
-
     overwrite = config["hdeg"]["bse"].get("overwrite", False)
 
     if batch_size <= 0:

@@ -991,7 +991,7 @@ def main() -> None:
     # Behavioral-state configuration paths
     # -------------------------------------------------------------
 
-    behavioral_config_path = (
+    behavioral_config_path = Path(
         root / "configs" / "hdeg"
         / "behavioral_states.yaml"
     )

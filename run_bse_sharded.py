@@ -10,9 +10,8 @@ import torch
 import yaml
 
 from src.models.hdeg.bse import BehavioralStateEstimator
-from src.common.semantics.behavioral_state_config import (
-    load_behavioral_state_config,
-)
+from src.common.graph.semantics import (load_behavioral_state_config) 
+
 from src.utils.device import get_device
 from src.utils.get_folders_utils import get_processed_folder
 from src.utils.seed import set_seed

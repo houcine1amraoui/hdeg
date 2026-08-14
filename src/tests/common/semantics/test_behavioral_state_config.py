@@ -1030,3 +1030,85 @@ def test_validation_alias_matches_loader(
     assert loaded.state_ids() == (
         validated.state_ids()
     )
+
+def test_matrix_row_must_have_at_least_one_compatible_device(
+    config_files,
+    valid_config,
+):
+    config_path, devices_path = config_files
+
+    # Keep the semantic declaration valid, but make the
+    # executable matrix row empty.
+    valid_config["matrix"]["rows"][0] = [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ]
+
+    with config_path.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+        yaml.safe_dump(
+            valid_config,
+            file,
+            sort_keys=False,
+        )
+
+    with pytest.raises(
+        BehavioralStateConfigError,
+        match="does not match",
+    ):
+        load_behavioral_state_config(
+            config_path,
+            devices_path,
+        )
+
+
+def test_matrix_columns_must_form_partition(
+    config_files,
+    valid_config,
+):
+    config_path, devices_path = config_files
+
+    # Device 0 is now absent from every state.
+    valid_config["behavioral_states"][0][
+        "compatible_devices"
+    ] = [
+        {
+            "index": 1,
+            "id": "device_1",
+            "relation": "DIRECT",
+        }
+    ]
+
+    valid_config["matrix"]["rows"][0] = [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+    ]
+
+    with config_path.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+        yaml.safe_dump(
+            valid_config,
+            file,
+            sort_keys=False,
+        )
+
+    with pytest.raises(
+        BehavioralStateConfigError,
+        match="exactly one",
+    ):
+        load_behavioral_state_config(
+            config_path,
+            devices_path,
+        )

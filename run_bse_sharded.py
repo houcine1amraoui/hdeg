@@ -767,21 +767,17 @@ def main() -> None:
     # Command-line arguments
     # -------------------------------------------------------------
 
-    parser = argparse.ArgumentParser(
-        description=(
-            "HDEG — BSE sharded standalone execution."
-        )
-    )
+    # # parse CLI args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_root_dir", type=str)
+    args = parser.parse_args()
 
-    parser.add_argument(
-        "--project_root_dir",
-        type=str,
-        default=None,
-        help=(
-            "Override project_root_dir from "
-            "configs/config.yaml."
-        ),
-    )
+    # override project_root_directory
+    if args.project_root_dir:
+        config["project_root_dir"] = args.project_root_dir
+
+    root = config["project_root_dir"]
+    print(root)
 
     parser.add_argument(
         "--split",
@@ -988,7 +984,7 @@ def main() -> None:
     # -------------------------------------------------------------
 
     behavioral_config_path = (
-        processed_data_folder
+        root / "configs" / "hdeg"
         / "behavioral_states.yaml"
     )
 

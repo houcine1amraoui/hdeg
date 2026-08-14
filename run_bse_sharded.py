@@ -797,7 +797,7 @@ def main() -> None:
 
     dbrl_split_dir = (
         dbrl_dir
-        / args.split
+        / "train"
     )
 
     bse_dir = (
@@ -807,7 +807,7 @@ def main() -> None:
 
     bse_split_dir = (
         bse_dir
-        / args.split
+        / "train"
     )
 
     if not dbrl_split_dir.is_dir():
@@ -840,7 +840,7 @@ def main() -> None:
     print("=" * 70)
 
     print(
-        f"Split               : {args.split}"
+        f"Split               : train"
     )
 
     print(
@@ -990,7 +990,7 @@ def main() -> None:
 
     manifest = load_dbrl_manifest(
         dbrl_dir=dbrl_dir,
-        split=args.split,
+        split="train",
     )
 
     total_samples = int(
@@ -1067,7 +1067,7 @@ def main() -> None:
         first_payload = (
             load_dbrl_representation_shard(
                 shard_path=first_shard_path,
-                expected_split=args.split,
+                expected_split="train",
                 expected_num_devices=num_devices,
                 expected_embedding_dim=(
                     -1
@@ -1171,7 +1171,7 @@ def main() -> None:
         payload = (
             load_dbrl_representation_shard(
                 shard_path=shard_path,
-                expected_split=args.split,
+                expected_split="train",
                 expected_num_devices=num_devices,
                 expected_embedding_dim=embedding_dim,
             )

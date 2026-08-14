@@ -32,39 +32,6 @@ MANIFEST_NAME = "manifest.json"
 
 
 # ---------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------
-
-def load_project_config(
-    config_path: Path,
-) -> dict[str, Any]:
-    """
-    Load the project configuration.
-
-    The runner intentionally follows the same configuration source
-    used by the existing DBRL sharded execution.
-    """
-
-    if not config_path.is_file():
-        raise FileNotFoundError(
-            f"Project configuration not found:\n{config_path}"
-        )
-
-    with config_path.open(
-        "r",
-        encoding="utf-8",
-    ) as file:
-        config = yaml.safe_load(file)
-
-    if not isinstance(config, dict):
-        raise ValueError(
-            "Project configuration must be a mapping."
-        )
-
-    return config
-
-
-# ---------------------------------------------------------------------
 # Manifest loading
 # ---------------------------------------------------------------------
 
@@ -787,151 +754,15 @@ def main() -> None:
     root = config["project_root_dir"]
     print(root)
 
-    parser.add_argument(
-        "--split",
-        type=str,
-        default="train",
-        choices=SPLITS,
-        help="DBRL representation split to process.",
-    )
+    batch_size = config["hdeg"]["dbrl"]["batch_size"] 
 
-    parser.add_argument(
-        "--max_shards",
-        type=int,
-        default=None,
-        help=(
-            "Optional maximum number of shards to process. "
-            "Useful for smoke testing."
-        ),
-    )
-
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=None,
-        help=(
-            "Optional BSE inference batch size. "
-            "If omitted, use config value."
-        ),
-    )
-
-    parser.add_argument(
-        "--num_heads",
-        type=int,
-        default=None,
-        help=(
-            "Optional BSE number of attention heads. "
-            "If omitted, use config value or 1."
-        ),
-    )
-
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Overwrite existing BSE representation shards.",
-    )
-
-    args = parser.parse_args()
-
-    # -------------------------------------------------------------
-    # Project configuration
-    # -------------------------------------------------------------
-
-    config_path = Path(
-        "configs/config.yaml"
-    )
-
-    config = load_project_config(
-        config_path
-    )
-
-    if args.project_root_dir:
-        config["project_root_dir"] = (
-            args.project_root_dir
-        )
-
-    set_seed(
-        int(config["seed"])
-    )
-
-    device = get_device()
-
-    # -------------------------------------------------------------
-    # HDEG BSE configuration
-    # -------------------------------------------------------------
-
-    hdeg_config = config.get(
-        "hdeg"
-    )
-
-    if not isinstance(
-        hdeg_config,
-        dict,
-    ):
-        raise KeyError(
-            "Project configuration is missing "
-            "'hdeg'."
-        )
-
-    bse_config = hdeg_config.get(
-        "bse",
-        {},
-    )
-
-    if not isinstance(
-        bse_config,
-        dict,
-    ):
-        raise TypeError(
-            "config['hdeg']['bse'] must be a mapping."
-        )
-
-    batch_size = (
-        args.batch_size
-        if args.batch_size is not None
-        else int(
-            bse_config.get(
-                "batch_size",
-                32,
-            )
-        )
-    )
-
-    num_heads = (
-        args.num_heads
-        if args.num_heads is not None
-        else int(
-            bse_config.get(
-                "num_heads",
-                1,
-            )
-        )
-    )
+    num_heads = config["hdeg"]["bse"]["num_heads"]
+    
+    max_shards = config["hdeg"]["bse"].get("max_shards", None)
 
     max_shards = args.max_shards
 
-    if max_shards is None:
-        configured_max_shards = (
-            bse_config.get(
-                "max_shards",
-                None,
-            )
-        )
-
-        if configured_max_shards is not None:
-            max_shards = int(
-                configured_max_shards
-            )
-
-    overwrite = (
-        args.overwrite
-        or bool(
-            bse_config.get(
-                "overwrite",
-                False,
-            )
-        )
-    )
+    overwrite = config["hdeg"]["bse"].get("overwrite", False)
 
     if batch_size <= 0:
         raise ValueError(

@@ -51,6 +51,12 @@ hdeg:
     max_shards: None
     overwrite: False
 
+  bse:
+    batch_size: 32
+    num_heads: 1
+    max_shards: None
+    overwrite: False
+
 training:
   model: mtad_gat
   batch_size: 32

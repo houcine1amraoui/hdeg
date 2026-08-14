@@ -767,6 +767,14 @@ def main() -> None:
     # Command-line arguments
     # -------------------------------------------------------------
 
+    # 1. Load config
+    with open("configs/config.yaml") as f:
+        config = yaml.safe_load(f)
+        
+    set_seed(config["seed"])
+
+    device = get_device()
+    
     # # parse CLI args
     parser = argparse.ArgumentParser()
     parser.add_argument("--project_root_dir", type=str)

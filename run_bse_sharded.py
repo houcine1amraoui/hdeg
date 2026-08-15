@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import argparse
 import gc
-import json
 from pathlib import Path
 from typing import Any, Optional
 
 import torch
 import yaml
 
+from src.common.graph.semantics import load_behavioral_state_config
 from src.models.hdeg.bse import BehavioralStateEstimator
-from src.common.graph.semantics import (load_behavioral_state_config) 
-
 from src.utils.device import get_device
 from src.utils.get_folders_utils import get_processed_folder
 from src.utils.seed import set_seed
@@ -28,140 +26,136 @@ SPLITS = (
     "actor1_test",
 )
 
-MANIFEST_NAME = "manifest.json"
+DBRL_SHARD_PATTERN = "shard_*.pt"
 
 
 # ---------------------------------------------------------------------
-# Manifest loading
+# DBRL representation shard discovery
 # ---------------------------------------------------------------------
 
-def load_dbrl_manifest(
-    dbrl_dir: Path,
-    split: str,
-) -> dict[str, Any]:
+def discover_dbrl_representation_shards(
+    dbrl_split_dir: Path,
+) -> list[Path]:
     """
-    Load and validate the manifest describing the DBRL input shards.
+    Discover persisted DBRL representation shards.
 
-    DBRL representation shards are expected to preserve the same
-    sample partitioning as the corresponding window shards.
+    The frozen DBRL artifact contract does not define a DBRL manifest.
+    DBRL persists one representation artifact per upstream window shard
+    using the filename convention:
+
+        shard_000000.pt
+        shard_000001.pt
+        ...
+
+    Therefore BSE discovers the persisted .pt artifacts directly from
+    the DBRL split directory.
     """
 
-    split_dir = dbrl_dir / split
-    manifest_path = split_dir / MANIFEST_NAME
-
-    if not manifest_path.is_file():
+    if not dbrl_split_dir.is_dir():
         raise FileNotFoundError(
-            f"DBRL representation manifest not found:\n"
-            f"{manifest_path}"
+            "DBRL representation split directory not found:\n"
+            f"{dbrl_split_dir}"
         )
 
-    with manifest_path.open(
-        "r",
-        encoding="utf-8",
-    ) as file:
-        manifest = json.load(file)
-
-    required = (
-        "split",
-        "num_samples",
-        "num_shards",
-        "shards",
+    shard_paths = sorted(
+        dbrl_split_dir.glob(DBRL_SHARD_PATTERN)
     )
 
-    missing = [
-        key
-        for key in required
-        if key not in manifest
-    ]
-
-    if missing:
-        raise KeyError(
-            f"DBRL manifest {manifest_path} is missing "
-            f"required fields: {missing}"
+    if not shard_paths:
+        raise FileNotFoundError(
+            "No DBRL representation shards were found in:\n"
+            f"{dbrl_split_dir}\n"
+            f"Expected files matching: {DBRL_SHARD_PATTERN}"
         )
 
-    if manifest["split"] != split:
-        raise ValueError(
-            "DBRL manifest split mismatch: "
-            f"expected '{split}', "
-            f"received '{manifest['split']}'."
-        )
-
-    num_samples = int(
-        manifest["num_samples"]
-    )
-
-    num_shards = int(
-        manifest["num_shards"]
-    )
-
-    if num_samples <= 0:
-        raise ValueError(
-            "DBRL manifest num_samples must be positive."
-        )
-
-    if num_shards <= 0:
-        raise ValueError(
-            "DBRL manifest num_shards must be positive."
-        )
-
-    shards = manifest["shards"]
-
-    if not isinstance(shards, list):
-        raise TypeError(
-            "DBRL manifest 'shards' must be a list."
-        )
-
-    if len(shards) != num_shards:
-        raise ValueError(
-            "DBRL manifest shard-count mismatch: "
-            f"expected {num_shards}, "
-            f"received {len(shards)}."
-        )
-
-    return manifest
+    return shard_paths
 
 
-# ---------------------------------------------------------------------
-# DBRL shard path resolution
-# ---------------------------------------------------------------------
-
-def resolve_dbrl_shard_path(
-    split_dir: Path,
-    manifest_entry: str,
-) -> Path:
+def parse_dbrl_shard_filename(
+    shard_path: Path,
+) -> int:
     """
-    Resolve a DBRL representation shard referenced by the manifest.
+    Extract the zero-based shard index from a DBRL shard filename.
 
-    Supports both:
-
-        train/shard_000000.pt
-
-    and:
+    Expected format:
 
         shard_000000.pt
     """
 
-    candidate = (
-        split_dir.parent / manifest_entry
+    if shard_path.suffix != ".pt":
+        raise ValueError(
+            f"Invalid DBRL representation shard suffix: "
+            f"{shard_path.name}"
+        )
+
+    stem = shard_path.stem
+
+    if not stem.startswith("shard_"):
+        raise ValueError(
+            f"Invalid DBRL representation shard filename: "
+            f"{shard_path.name}"
+        )
+
+    index_text = stem[len("shard_"):]
+
+    if not index_text.isdigit():
+        raise ValueError(
+            f"Invalid DBRL representation shard filename: "
+            f"{shard_path.name}"
+        )
+
+    shard_index = int(index_text)
+
+    if shard_index < 0:
+        raise ValueError(
+            f"Invalid negative DBRL shard index in "
+            f"{shard_path.name}."
+        )
+
+    return shard_index
+
+
+def validate_dbrl_shard_sequence(
+    shard_paths: list[Path],
+) -> None:
+    """
+    Verify that discovered DBRL shard filenames form a contiguous
+    zero-based sequence.
+
+    This validation is performed before any BSE computation so that a
+    missing, duplicated, or unexpectedly named DBRL artifact cannot
+    silently create incomplete downstream coverage.
+    """
+
+    if not shard_paths:
+        raise ValueError(
+            "DBRL representation shard list is empty."
+        )
+
+    actual_indices = [
+        parse_dbrl_shard_filename(path)
+        for path in shard_paths
+    ]
+
+    if len(set(actual_indices)) != len(actual_indices):
+        raise RuntimeError(
+            "Duplicate DBRL shard indices were discovered: "
+            f"{actual_indices}."
+        )
+
+    expected_indices = list(
+        range(len(shard_paths))
     )
 
-    if candidate.is_file():
-        return candidate
-
-    candidate = (
-        split_dir / Path(manifest_entry).name
-    )
-
-    if candidate.is_file():
-        return candidate
-
-    raise FileNotFoundError(
-        "DBRL representation shard referenced by "
-        "the manifest was not found.\n"
-        f"Manifest entry: {manifest_entry}\n"
-        f"Checked path: {candidate}"
-    )
+    if actual_indices != expected_indices:
+        raise RuntimeError(
+            "DBRL representation shards do not form a contiguous "
+            "zero-based sequence. "
+            f"Expected {expected_indices[:10]}"
+            f"{'...' if len(expected_indices) > 10 else ''}, "
+            f"received {actual_indices[:10]}"
+            f"{'...' if len(actual_indices) > 10 else ''}."
+        )
 
 
 # ---------------------------------------------------------------------
@@ -173,12 +167,22 @@ def load_dbrl_representation_shard(
     *,
     expected_split: str,
     expected_num_devices: int,
-    expected_embedding_dim: int,
+    expected_embedding_dim: Optional[int],
 ) -> dict[str, Any]:
     """
     Load exactly one persisted DBRL representation shard.
 
-    Only the current shard is materialized in memory.
+    Parameters
+    ----------
+    expected_embedding_dim:
+        If not None, the artifact embedding dimension must equal this
+        value. If None, the dimension is established from this artifact
+        and still validated against the artifact's own metadata.
+
+    Returns
+    -------
+    dict
+        The persisted DBRL artifact payload.
     """
 
     if not shard_path.is_file():
@@ -249,24 +253,30 @@ def load_dbrl_representation_shard(
     if Z.ndim != 3:
         raise ValueError(
             f"DBRL representations in {shard_path} must have "
-            "shape (S, N, D). Received {tuple(Z.shape)}."
+            "shape (S, N, D). "
+            f"Received {tuple(Z.shape)}."
         )
 
     num_samples = Z.shape[0]
     num_devices = Z.shape[1]
     embedding_dim = Z.shape[2]
 
+    if num_samples <= 0:
+        raise ValueError(
+            f"DBRL representation shard {shard_path} is empty."
+        )
+
     expected_shape = (
         num_samples,
         expected_num_devices,
-        expected_embedding_dim,
+        embedding_dim,
     )
 
     if tuple(Z.shape) != expected_shape:
         raise ValueError(
             f"Unexpected DBRL representation shape in "
-            f"{shard_path}: expected {expected_shape}, "
-            f"received {tuple(Z.shape)}."
+            f"{shard_path}: expected device dimension "
+            f"N={expected_num_devices}, received {tuple(Z.shape)}."
         )
 
     if Z.dtype != torch.float32:
@@ -300,12 +310,20 @@ def load_dbrl_representation_shard(
             f"received {metadata_num_devices}."
         )
 
-    if metadata_embedding_dim != expected_embedding_dim:
+    if metadata_embedding_dim != embedding_dim:
         raise ValueError(
-            f"DBRL metadata embedding-dimension mismatch "
-            f"in {shard_path}: expected {expected_embedding_dim}, "
-            f"received {metadata_embedding_dim}."
+            f"DBRL metadata embedding-dimension mismatch in "
+            f"{shard_path}: tensor has D={embedding_dim}, "
+            f"metadata reports D={metadata_embedding_dim}."
         )
+
+    if expected_embedding_dim is not None:
+        if metadata_embedding_dim != expected_embedding_dim:
+            raise ValueError(
+                f"DBRL metadata embedding-dimension mismatch "
+                f"in {shard_path}: expected {expected_embedding_dim}, "
+                f"received {metadata_embedding_dim}."
+            )
 
     shard_index = int(
         payload["shard_index"]
@@ -323,6 +341,17 @@ def load_dbrl_representation_shard(
         raise ValueError(
             f"Invalid shard_index={shard_index} "
             f"in {shard_path}."
+        )
+
+    filename_index = parse_dbrl_shard_filename(
+        shard_path
+    )
+
+    if shard_index != filename_index:
+        raise ValueError(
+            f"DBRL shard-index mismatch in {shard_path}: "
+            f"filename encodes index {filename_index}, "
+            f"payload reports {shard_index}."
         )
 
     if start_index < 0:
@@ -405,28 +434,14 @@ def run_bse_on_shard(
     """
     Run BSE on one DBRL representation shard.
 
-    Parameters
-    ----------
-    model:
-        Frozen BSE architecture.
-
-    Z:
-        DBRL representation tensor with shape:
-
-            (S, N, D)
-
-    compatibility_mask:
-        Validated behavioral-state compatibility matrix:
-
-            (K, N)
-
-    Returns
-    -------
-    torch.Tensor
-        Behavioral-state representations:
-
-            (S, K, D)
+    Z has shape (S, N, D); the returned behavioral-state
+    representation has shape (S, K, D).
     """
+
+    if batch_size <= 0:
+        raise ValueError(
+            "batch_size must be greater than zero."
+        )
 
     if Z.ndim != 3:
         raise ValueError(
@@ -437,8 +452,7 @@ def run_bse_on_shard(
     if compatibility_mask.ndim != 2:
         raise ValueError(
             "Compatibility mask must have shape (K, N). "
-            f"Received "
-            f"{tuple(compatibility_mask.shape)}."
+            f"Received {tuple(compatibility_mask.shape)}."
         )
 
     if Z.shape[1] != compatibility_mask.shape[1]:
@@ -448,9 +462,7 @@ def run_bse_on_shard(
             f"mask has N={compatibility_mask.shape[1]}."
         )
 
-    if compatibility_mask.shape[0] != (
-        model.num_states
-    ):
+    if compatibility_mask.shape[0] != model.num_states:
         raise ValueError(
             "BSE state-count mismatch: "
             f"model has K={model.num_states}, "
@@ -480,7 +492,6 @@ def run_bse_on_shard(
     outputs: list[torch.Tensor] = []
 
     with torch.inference_mode():
-
         for start in range(
             0,
             Z.shape[0],
@@ -491,9 +502,7 @@ def run_bse_on_shard(
                 Z.shape[0],
             )
 
-            z_batch = Z[
-                start:end
-            ].to(
+            z_batch = Z[start:end].to(
                 device,
                 non_blocking=False,
             )
@@ -509,21 +518,16 @@ def run_bse_on_shard(
                 model.embedding_dim,
             )
 
-            if tuple(
-                S_batch.shape
-            ) != expected_shape:
+            if tuple(S_batch.shape) != expected_shape:
                 raise RuntimeError(
                     "BSE output shape mismatch: "
                     f"expected {expected_shape}, "
                     f"received {tuple(S_batch.shape)}."
                 )
 
-            if not torch.isfinite(
-                S_batch
-            ).all():
+            if not torch.isfinite(S_batch).all():
                 raise RuntimeError(
-                    "BSE produced NaN or infinite "
-                    "values."
+                    "BSE produced NaN or infinite values."
                 )
 
             outputs.append(
@@ -572,9 +576,9 @@ def save_bse_representation_shard(
     """
     Persist one BSE representation shard.
 
-    DBRL provenance is deliberately retained so that the resulting
-    artifact can be traced back to the exact DBRL shard and therefore
-    to the corresponding window samples.
+    DBRL provenance is retained so that the BSE artifact can be traced
+    to the exact DBRL shard and therefore to the corresponding window
+    samples.
     """
 
     if output_path.exists() and not overwrite:
@@ -587,8 +591,7 @@ def save_bse_representation_shard(
 
     if S.ndim != 3:
         raise ValueError(
-            "BSE representation tensor must have shape "
-            "(S, K, D)."
+            "BSE representation tensor must have shape (S, K, D)."
         )
 
     if S.dtype != torch.float32:
@@ -612,8 +615,7 @@ def save_bse_representation_shard(
 
     if not torch.isfinite(S).all():
         raise ValueError(
-            "BSE representation tensor contains "
-            "NaN or infinite values."
+            "BSE representation tensor contains NaN or infinite values."
         )
 
     output_path.parent.mkdir(
@@ -622,18 +624,12 @@ def save_bse_representation_shard(
     )
 
     payload = {
-        # ---------------------------------------------------------
         # Scientific artifact
-        # ---------------------------------------------------------
         "representations": S,
 
-        # ---------------------------------------------------------
         # Split / provenance
-        # ---------------------------------------------------------
         "split": source_dbrl_payload["split"],
-        "source_dbrl_shard": source_dbrl_payload[
-            "source_shard"
-        ],
+        "source_dbrl_shard": source_dbrl_payload["source_shard"],
         "source_dbrl_shard_index": int(
             source_dbrl_payload["shard_index"]
         ),
@@ -641,9 +637,7 @@ def save_bse_representation_shard(
             source_dbrl_payload["shard_index"]
         ),
 
-        # ---------------------------------------------------------
         # Sample alignment
-        # ---------------------------------------------------------
         "start_index": int(
             source_dbrl_payload["start_index"]
         ),
@@ -651,28 +645,16 @@ def save_bse_representation_shard(
             source_dbrl_payload["end_index"]
         ),
 
-        # ---------------------------------------------------------
         # Structural metadata
-        # ---------------------------------------------------------
         "window_size": int(
             source_dbrl_payload["window_size"]
         ),
-        "num_devices": int(
-            num_devices
-        ),
-        "num_states": int(
-            num_states
-        ),
-        "embedding_dim": int(
-            embedding_dim
-        ),
-        "num_heads": int(
-            num_heads
-        ),
+        "num_devices": int(num_devices),
+        "num_states": int(num_states),
+        "embedding_dim": int(embedding_dim),
+        "num_heads": int(num_heads),
 
-        # ---------------------------------------------------------
         # Execution provenance
-        # ---------------------------------------------------------
         "seed": int(seed),
     }
 
@@ -693,9 +675,7 @@ def verify_bse_output_shard(
     expected_num_states: int,
     expected_embedding_dim: int,
 ) -> None:
-    """
-    Verify the scientific representation produced for one shard.
-    """
+    """Verify the scientific BSE representation produced for a shard."""
 
     expected_shape = (
         expected_samples,
@@ -719,8 +699,7 @@ def verify_bse_output_shard(
 
     if not torch.isfinite(S).all():
         raise RuntimeError(
-            "BSE representation contains NaN "
-            "or infinite values."
+            "BSE representation contains NaN or infinite values."
         )
 
 
@@ -729,38 +708,68 @@ def verify_bse_output_shard(
 # ---------------------------------------------------------------------
 
 def main() -> None:
-
     # -------------------------------------------------------------
-    # Command-line arguments
+    # Configuration and command-line arguments
     # -------------------------------------------------------------
 
-    # 1. Load config
-    with open("configs/config.yaml") as f:
-        config = yaml.safe_load(f)
-        
-    set_seed(config["seed"])
+    with open(
+        "configs/config.yaml",
+        "r",
+        encoding="utf-8",
+    ) as file:
+        config = yaml.safe_load(file)
 
-    device = get_device()
-    
-    # # parse CLI args
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project_root_dir", type=str)
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the frozen BSE module on persisted DBRL "
+            "representation shards."
+        )
+    )
+
+    parser.add_argument(
+        "--project_root_dir",
+        type=str,
+        default=None,
+        help="Override project_root_dir from config.yaml.",
+    )
+
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="train",
+        choices=SPLITS,
+        help="DBRL/BSE split to process.",
+    )
+
     args = parser.parse_args()
 
-    # override project_root_directory
     if args.project_root_dir:
         config["project_root_dir"] = args.project_root_dir
 
     root = config["project_root_dir"]
-    print(root)
 
-    batch_size = config["hdeg"]["dbrl"]["batch_size"] 
+    set_seed(config["seed"])
+    device = get_device()
 
-    num_heads = config["hdeg"]["bse"]["num_heads"]
-    
-    max_shards = config["hdeg"]["bse"].get("max_shards", None)
+    batch_size = int(
+        config["hdeg"]["dbrl"]["batch_size"]
+    )
 
-    overwrite = config["hdeg"]["bse"].get("overwrite", False)
+    num_heads = int(
+        config["hdeg"]["bse"]["num_heads"]
+    )
+
+    max_shards = config["hdeg"]["bse"].get(
+        "max_shards",
+        None,
+    )
+
+    overwrite = bool(
+        config["hdeg"]["bse"].get(
+            "overwrite",
+            False,
+        )
+    )
 
     if batch_size <= 0:
         raise ValueError(
@@ -772,105 +781,82 @@ def main() -> None:
             "BSE num_heads must be greater than zero."
         )
 
-    if (
-        max_shards is not None
-        and max_shards <= 0
-    ):
-        raise ValueError(
-            "max_shards must be greater than zero."
-        )
+    if max_shards is not None:
+        max_shards = int(max_shards)
+        if max_shards <= 0:
+            raise ValueError(
+                "max_shards must be greater than zero."
+            )
 
     # -------------------------------------------------------------
     # Processed-data paths
     # -------------------------------------------------------------
 
     processed_data_folder = Path(
-        get_processed_folder(
-            config
-        )
+        get_processed_folder(config)
     )
 
-    dbrl_dir = (
-        processed_data_folder
-        / "dbrl"
-    )
+    dbrl_dir = processed_data_folder / "dbrl"
+    dbrl_split_dir = dbrl_dir / args.split
 
-    dbrl_split_dir = (
-        dbrl_dir
-        / "train"
-    )
-
-    bse_dir = (
-        processed_data_folder
-        / "bse"
-    )
-
-    bse_split_dir = (
-        bse_dir
-        / "train"
-    )
-
-    if not dbrl_split_dir.is_dir():
-        raise FileNotFoundError(
-            "DBRL representation split directory "
-            f"not found:\n{dbrl_split_dir}"
-        )
+    bse_dir = processed_data_folder / "bse"
+    bse_split_dir = bse_dir / args.split
 
     # -------------------------------------------------------------
     # Behavioral-state configuration paths
     # -------------------------------------------------------------
 
-    behavioral_config_path = Path(
-        f"{root}/configs/hdeg/behavioral_states.yaml"
+    behavioral_config_path = (
+        Path(root)
+        / "configs"
+        / "hdeg"
+        / "behavioral_states.yaml"
     )
 
-    devices_path = (
-        processed_data_folder
-        / "devices.json"
-    )
+    devices_path = processed_data_folder / "devices.json"
 
     # -------------------------------------------------------------
     # Header
     # -------------------------------------------------------------
 
     print("=" * 70)
-    print(
-        "HDEG — BSE Sharded Standalone Execution"
-    )
+    print("HDEG — BSE Sharded Standalone Execution")
     print("=" * 70)
+    print(f"Split               : {args.split}")
+    print(f"DBRL input directory : {dbrl_split_dir}")
+    print(f"BSE output directory : {bse_split_dir}")
+    print(f"Device               : {device}")
+    print(f"BSE batch size       : {batch_size}")
+    print(f"BSE attention heads  : {num_heads}")
+    print(f"Max shards           : {max_shards}")
+    print(f"Overwrite            : {overwrite}")
+    print()
 
-    print(
-        f"Split               : train"
+    # -------------------------------------------------------------
+    # Discover and validate the frozen DBRL artifact layer
+    # -------------------------------------------------------------
+
+    dbrl_shard_paths = discover_dbrl_representation_shards(
+        dbrl_split_dir
     )
 
-    print(
-        f"DBRL input directory : {dbrl_split_dir}"
+    validate_dbrl_shard_sequence(
+        dbrl_shard_paths
     )
 
-    print(
-        f"BSE output directory : {bse_split_dir}"
-    )
+    total_dbrl_shards = len(dbrl_shard_paths)
+
+    if max_shards is not None:
+        shard_paths = dbrl_shard_paths[:max_shards]
+    else:
+        shard_paths = dbrl_shard_paths
 
     print(
-        f"Device               : {device}"
+        f"Discovered DBRL shards : {total_dbrl_shards}"
     )
-
     print(
-        f"BSE batch size       : {batch_size}"
+        f"Shards to process      : {len(shard_paths)}"
     )
-
-    print(
-        f"BSE attention heads  : {num_heads}"
-    )
-
-    print(
-        f"Max shards           : {max_shards}"
-    )
-
-    print(
-        f"Overwrite            : {overwrite}"
-    )
-
     print()
 
     # -------------------------------------------------------------
@@ -881,54 +867,43 @@ def main() -> None:
         "Loading behavioral-state configuration..."
     )
 
-    behavioral_config = (
-        load_behavioral_state_config(
-            config_path=behavioral_config_path,
-            devices_path=devices_path,
-        )
+    behavioral_config = load_behavioral_state_config(
+        config_path=behavioral_config_path,
+        devices_path=devices_path,
     )
 
-    num_states = (
+    num_states = int(
         behavioral_config.num_states
     )
 
-    num_devices = (
+    num_devices = int(
         behavioral_config.num_devices
     )
 
-    compatibility_mask = (
-        behavioral_config.torch_mask(
-            dtype=torch.float32,
-            device=device,
-            clone=True,
-        )
+    compatibility_mask = behavioral_config.torch_mask(
+        dtype=torch.float32,
+        device=device,
+        clone=True,
     )
 
     print(
         f"  Dataset             : "
         f"{behavioral_config.dataset_name}"
     )
-
     print(
-        f"  Number of devices   : "
-        f"{num_devices}"
+        f"  Number of devices   : {num_devices}"
     )
-
     print(
-        f"  Number of states    : "
-        f"{num_states}"
+        f"  Number of states    : {num_states}"
     )
-
     print(
         f"  Compatibility shape : "
         f"{tuple(compatibility_mask.shape)}"
     )
-
     print(
         f"  Compatibility dtype : "
         f"{compatibility_mask.dtype}"
     )
-
     print()
 
     # -------------------------------------------------------------
@@ -940,9 +915,7 @@ def main() -> None:
         num_devices,
     )
 
-    if tuple(
-        compatibility_mask.shape
-    ) != expected_mask_shape:
+    if tuple(compatibility_mask.shape) != expected_mask_shape:
         raise RuntimeError(
             "Behavioral compatibility matrix shape mismatch: "
             f"expected {expected_mask_shape}, "
@@ -958,9 +931,7 @@ def main() -> None:
         )
 
     if not torch.all(
-        compatibility_mask.sum(
-            dim=1
-        ) > 0
+        compatibility_mask.sum(dim=1) > 0
     ):
         raise RuntimeError(
             "At least one behavioral state has no "
@@ -968,9 +939,7 @@ def main() -> None:
         )
 
     if not torch.all(
-        compatibility_mask.sum(
-            dim=0
-        ) == 1
+        compatibility_mask.sum(dim=0) == 1
     ):
         raise RuntimeError(
             "Behavioral compatibility matrix violates "
@@ -978,118 +947,37 @@ def main() -> None:
         )
 
     print(
-        "[PASS] Behavioral-state compatibility "
-        "configuration validated."
+        "[PASS] Behavioral-state compatibility configuration validated."
     )
-
     print()
 
     # -------------------------------------------------------------
-    # Load DBRL representation manifest
+    # Establish embedding dimension from the first DBRL artifact
     # -------------------------------------------------------------
 
-    manifest = load_dbrl_manifest(
-        dbrl_dir=dbrl_dir,
-        split="train",
+    first_payload = load_dbrl_representation_shard(
+        shard_path=shard_paths[0],
+        expected_split=args.split,
+        expected_num_devices=num_devices,
+        expected_embedding_dim=None,
     )
 
-    total_samples = int(
-        manifest["num_samples"]
-    )
-
-    total_shards = int(
-        manifest["num_shards"]
-    )
-
-    shard_entries = manifest[
-        "shards"
-    ]
-
-    if max_shards is not None:
-        shard_entries = shard_entries[
-            :max_shards
-        ]
-
-    # -------------------------------------------------------------
-    # Header with manifest information
-    # -------------------------------------------------------------
-
-    print(
-        f"Total DBRL samples  : {total_samples}"
+    embedding_dim = int(
+        first_payload["representations"].shape[2]
     )
 
     print(
-        f"Total DBRL shards    : {total_shards}"
+        f"DBRL embedding dimension : {embedding_dim}"
     )
 
-    print(
-        f"Shards to process   : {len(shard_entries)}"
-    )
-
-    print()
-
-    # -------------------------------------------------------------
-    # Determine embedding dimension
-    # -------------------------------------------------------------
-
-    embedding_dim: Optional[int] = None
-
-    if "embedding_dim" in manifest:
-        embedding_dim = int(
-            manifest["embedding_dim"]
-        )
-
-    if embedding_dim is None:
-        # The first shard will establish D.
-        # This is still validated against the actual shard metadata.
-        print(
-            "Embedding dimension : determined from first shard"
-        )
-    else:
-        print(
-            f"Embedding dimension : {embedding_dim}"
-        )
-
-    print()
+    # The first artifact is only inspected to establish D. It will be
+    # loaded again by the normal sequential processing loop below so
+    # that every shard follows exactly the same path and verification.
+    del first_payload
+    gc.collect()
 
     # -------------------------------------------------------------
-    # Build BSE after the semantic configuration is known
-    # -------------------------------------------------------------
-
-    if embedding_dim is None:
-        first_shard_path = (
-            resolve_dbrl_shard_path(
-                split_dir=dbrl_split_dir,
-                manifest_entry=shard_entries[0],
-            )
-        )
-
-        first_payload = (
-            load_dbrl_representation_shard(
-                shard_path=first_shard_path,
-                expected_split="train",
-                expected_num_devices=num_devices,
-                expected_embedding_dim=(
-                    -1
-                ),
-            )
-        )
-
-        # The generic validator above intentionally cannot accept -1.
-        # Therefore derive D directly from the first artifact.
-        first_Z = first_payload[
-            "representations"
-        ]
-
-        embedding_dim = int(
-            first_Z.shape[2]
-        )
-
-        del first_Z
-        del first_payload
-
-    # -------------------------------------------------------------
-    # Build model
+    # Build frozen BSE
     # -------------------------------------------------------------
 
     model = build_bse(
@@ -1105,81 +993,46 @@ def main() -> None:
         for parameter in model.parameters()
     )
 
-    print(
-        "BSE model constructed successfully."
-    )
-
-    print(
-        f"  K                  : {num_states}"
-    )
-
-    print(
-        f"  N                  : {num_devices}"
-    )
-
-    print(
-        f"  Embedding dim      : {embedding_dim}"
-    )
-
-    print(
-        f"  Attention heads    : {num_heads}"
-    )
-
-    print(
-        f"  Trainable parameters: "
-        f"{parameter_count}"
-    )
-
+    print()
+    print("BSE model constructed successfully.")
+    print(f"  K                   : {num_states}")
+    print(f"  N                   : {num_devices}")
+    print(f"  Embedding dim       : {embedding_dim}")
+    print(f"  Attention heads     : {num_heads}")
+    print(f"  Trainable parameters: {parameter_count}")
     print()
 
     # -------------------------------------------------------------
-    # Process shards sequentially
+    # Process DBRL representation shards sequentially
     # -------------------------------------------------------------
 
     total_processed = 0
     processed_shards = 0
-
     expected_next_start = 0
 
-    for sequence_index, manifest_entry in enumerate(
-        shard_entries
-    ):
-
-        shard_path = (
-            resolve_dbrl_shard_path(
-                split_dir=dbrl_split_dir,
-                manifest_entry=manifest_entry,
-            )
-        )
-
+    for sequence_index, shard_path in enumerate(shard_paths):
         print("=" * 70)
         print(
-            f"BSE shard "
-            f"{sequence_index + 1}/{len(shard_entries)}"
+            f"BSE shard {sequence_index + 1}/"
+            f"{len(shard_paths)}"
         )
         print("=" * 70)
-
         print(
             f"Source DBRL shard : {shard_path}"
         )
 
         # ---------------------------------------------------------
-        # Load one DBRL representation shard
+        # Load one frozen DBRL representation artifact
         # ---------------------------------------------------------
 
-        # The expected embedding dimension is now known.
-        payload = (
-            load_dbrl_representation_shard(
-                shard_path=shard_path,
-                expected_split="train",
-                expected_num_devices=num_devices,
-                expected_embedding_dim=embedding_dim,
-            )
+        payload = load_dbrl_representation_shard(
+            shard_path=shard_path,
+            expected_split=args.split,
+            expected_num_devices=num_devices,
+            expected_embedding_dim=embedding_dim,
         )
 
-        Z = payload[
-            "representations"
-        ]
+        Z = payload["representations"]
 
         shard_index = int(
             payload["shard_index"]
@@ -1204,8 +1057,7 @@ def main() -> None:
                 "DBRL representation shards are not contiguous "
                 "in sample order: "
                 f"expected start_index={expected_next_start}, "
-                f"received {start_index} "
-                f"for shard {shard_index}."
+                f"received {start_index} for shard {shard_index}."
             )
 
         if end_index - start_index != shard_samples:
@@ -1216,33 +1068,22 @@ def main() -> None:
                 f"but Z contains {shard_samples}."
             )
 
-        print(
-            f"Shard index        : {shard_index}"
-        )
-
+        print(f"Shard index        : {shard_index}")
         print(
             f"Sample range       : "
             f"[{start_index}, {end_index})"
         )
-
         print(
-            f"Z shape            : "
-            f"{tuple(Z.shape)}"
+            f"Z shape            : {tuple(Z.shape)}"
         )
-
-        print(
-            f"Z dtype            : "
-            f"{Z.dtype}"
-        )
+        print(f"Z dtype            : {Z.dtype}")
 
         # ---------------------------------------------------------
         # Run BSE
         # ---------------------------------------------------------
 
         print()
-        print(
-            "Running BSE on shard..."
-        )
+        print("Running BSE on shard...")
 
         S = run_bse_on_shard(
             model=model,
@@ -1264,21 +1105,11 @@ def main() -> None:
         )
 
         print(
-            f"BSE output shape   : "
-            f"{tuple(S.shape)}"
+            f"BSE output shape   : {tuple(S.shape)}"
         )
-
-        print(
-            "[PASS] BSE output shape verified."
-        )
-
-        print(
-            "[PASS] BSE output dtype verified."
-        )
-
-        print(
-            "[PASS] BSE output finiteness verified."
-        )
+        print("[PASS] BSE output shape verified.")
+        print("[PASS] BSE output dtype verified.")
+        print("[PASS] BSE output finiteness verified.")
 
         # ---------------------------------------------------------
         # Save BSE representation shard
@@ -1302,13 +1133,8 @@ def main() -> None:
         )
 
         print()
-        print(
-            "[PASS] BSE output saved to:"
-        )
-
-        print(
-            f"       {output_path}"
-        )
+        print("[PASS] BSE output saved to:")
+        print(f"       {output_path}")
 
         # ---------------------------------------------------------
         # Update coverage
@@ -1333,77 +1159,53 @@ def main() -> None:
 
         print()
         print(
-            f"Processed samples so far: "
-            f"{total_processed}"
+            f"Processed samples so far: {total_processed}"
         )
 
     # -------------------------------------------------------------
-    # Final coverage verification
+    # Final execution summary
     # -------------------------------------------------------------
 
     print()
     print("=" * 70)
-    print(
-        "BSE sharded execution completed"
-    )
+    print("BSE sharded execution completed")
     print("=" * 70)
-
-    print(
-        f"Processed shards   : "
-        f"{processed_shards}"
-    )
-
-    print(
-        f"Processed samples  : "
-        f"{total_processed}"
-    )
-
-    print(
-        f"Expected total     : "
-        f"{total_samples}"
-    )
-
-    print(
-        f"BSE output dir     : "
-        f"{bse_split_dir}"
-    )
+    print(f"Processed shards   : {processed_shards}")
+    print(f"Processed samples  : {total_processed}")
+    print(f"Discovered shards  : {total_dbrl_shards}")
+    print(f"BSE output dir     : {bse_split_dir}")
 
     # -------------------------------------------------------------
     # Complete-run verification
     # -------------------------------------------------------------
 
     if max_shards is None:
-
-        if processed_shards != total_shards:
+        # Since the DBRL artifact layer has no manifest, the complete
+        # expected sample count is established by the final DBRL shard's
+        # end_index. We have already verified contiguous [start, end)
+        # coverage from zero, so this is the authoritative total.
+        if processed_shards != total_dbrl_shards:
             raise RuntimeError(
-                "Complete BSE execution did not process "
-                "the expected number of shards: "
-                f"expected {total_shards}, "
+                "Complete BSE execution did not process all "
+                "discovered DBRL representation shards: "
+                f"expected {total_dbrl_shards}, "
                 f"received {processed_shards}."
             )
 
-        if total_processed != total_samples:
+        if total_processed != expected_next_start:
             raise RuntimeError(
-                "Complete BSE execution did not process "
-                "the expected number of samples: "
-                f"expected {total_samples}, "
-                f"received {total_processed}."
-            )
-
-        if expected_next_start != total_samples:
-            raise RuntimeError(
-                "Complete BSE sample coverage is not contiguous "
-                "to the expected end index: "
-                f"expected {total_samples}, "
-                f"received {expected_next_start}."
+                "Complete BSE sample coverage is internally "
+                "inconsistent: "
+                f"processed={total_processed}, "
+                f"final_end_index={expected_next_start}."
             )
 
         print(
-            "[PASS] Complete split processed exactly once."
+            "[PASS] Complete DBRL representation split "
+            "processed exactly once."
         )
 
     else:
-
         print(
             "[INFO] Partial BSE execution requested; "
             "complete-split coverage was not required."
@@ -1411,8 +1213,7 @@ def main() -> None:
 
     print()
     print(
-        "[PASS] BSE sharded standalone execution "
-        "finished."
+        "[PASS] BSE sharded standalone execution finished."
     )
 
 

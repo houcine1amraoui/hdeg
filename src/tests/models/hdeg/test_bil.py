@@ -1,6 +1,6 @@
 import torch
 
-from bil import FROZEN_BIG_EDGES, BehavioralInteractionLearner, build_frozen_big_edge_index
+from src.models.hdeg.bil import FROZEN_BIG_EDGES, BehavioralInteractionLearner, build_frozen_big_edge_index
 
 
 def test_exact_big():

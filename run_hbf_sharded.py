@@ -199,7 +199,7 @@ def main() -> None:
     dataset_name = config["preprocessing"]["dataset_name"]
     hidden = int(config["hdeg"]["hbf"].get("dynamics_hidden_dim", 128))
 
-    base = root / "data" / "processed" / dataset_name
+    base = f"{root}/data/processed/{dataset_name}"
 
     split = "train"
     dbrl_dir = Path(f"{base}/dbrl/{split}")

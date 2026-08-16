@@ -10,6 +10,9 @@ import yaml
 
 from src.models.hdeg.ebrl import EcosystemBehavioralRepresentationLearner
 
+from src.utils.seed import set_seed
+from src.utils.device import get_device
+from src.utils.get_folders_utils import get_processed_folder
 
 SPLITS = (
     "train",
@@ -370,64 +373,27 @@ def validate_ebrl_output_artifact(
             raise ValueError(f"EBRL provenance mismatch for '{key}'.")
 
 
-def resolve_device() -> torch.device:
-    try:
-        from src.utils.device import get_device
-        return get_device()
-    except ImportError:
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def set_seed(seed: int) -> None:
-    try:
-        from src.utils.seed import set_seed as project_set_seed
-        project_set_seed(seed)
-        return
-    except ImportError:
-        pass
-
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-
-def resolve_processed_folder(config: dict[str, Any]) -> Path:
-    try:
-        from src.utils.get_folders_utils import get_processed_folder
-        return Path(get_processed_folder(config))
-    except ImportError:
-        root = Path(config.get("project_root_dir", "."))
-        return root / "data" / "processed"
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="HDEG EBRL sharded standalone execution."
-    )
-    parser.add_argument("--config", type=Path, default=Path("config.yaml"))
-    parser.add_argument("--split", choices=SPLITS, required=True)
-    parser.add_argument("--batch-size", type=int, default=None)
-    parser.add_argument("--max-shards", type=int, default=None)
-    parser.add_argument("--overwrite", action="store_true")
-    return parser.parse_args()
-
 
 def main() -> None:
-    args = parse_args()
 
-    with args.config.open("r", encoding="utf-8") as handle:
-        config = yaml.safe_load(handle)
+    with open("configs/config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
 
-    if not isinstance(config, dict):
-        raise TypeError("Configuration root must be a mapping.")
+    set_seed(config["seed"])
+
+    device = get_device()
+
+    # # parse CLI args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_root_dir", type=str)
+    args = parser.parse_args()
 
     seed = int(config["seed"])
     set_seed(seed)
 
-    ebrl_config = config.get("hdeg", {}).get("ebrl", {})
-    batch_size = int(args.batch_size if args.batch_size is not None else ebrl_config.get("batch_size", 32))
-    max_shards = args.max_shards if args.max_shards is not None else ebrl_config.get("max_shards")
-    overwrite = bool(args.overwrite or ebrl_config.get("overwrite", False))
+    batch_size = config["hdeg"]["ebrl"].get("batch_size", 32)
+    max_shards = config["hdeg"]["ebrl"].get("max_shards", None)
+    overwrite = config["hdeg"]["ebrl"].get("overwrite", False)
 
     if batch_size <= 0:
         raise ValueError("EBRL batch_size must be greater than zero.")
@@ -436,9 +402,8 @@ def main() -> None:
         if max_shards <= 0:
             raise ValueError("max_shards must be greater than zero.")
 
-    device = resolve_device()
     split = "train"
-    processed_root = resolve_processed_folder(config)
+    processed_root = get_processed_folder(config)
     bil_split_dir = processed_root / "bil" / split
     ebrl_split_dir = processed_root / "ebrl" / split
 

@@ -437,14 +437,15 @@ def main() -> None:
             raise ValueError("max_shards must be greater than zero.")
 
     device = resolve_device()
+    split = "train"
     processed_root = resolve_processed_folder(config)
-    bil_split_dir = processed_root / "bil" / args.split
-    ebrl_split_dir = processed_root / "ebrl" / args.split
+    bil_split_dir = processed_root / "bil" / split
+    ebrl_split_dir = processed_root / "ebrl" / split
 
     print("=" * 70)
     print("HDEG — EBRL Sharded Standalone Execution")
     print("=" * 70)
-    print(f"Split                : {args.split}")
+    print(f"Split                : {split}")
     print(f"BIL input directory  : {bil_split_dir}")
     print(f"EBRL output directory: {ebrl_split_dir}")
     print(f"Device               : {device}")
@@ -460,7 +461,7 @@ def main() -> None:
 
     first_payload = load_bil_representation_shard(
         shard_paths[0],
-        expected_split=args.split,
+        expected_split=split,
         expected_num_states=9,
         expected_embedding_dim=None,
     )
@@ -498,7 +499,7 @@ def main() -> None:
         shard_index = parse_shard_filename(shard_path)
         payload = load_bil_representation_shard(
             shard_path,
-            expected_split=args.split,
+            expected_split=split,
             expected_num_states=num_states,
             expected_embedding_dim=embedding_dim,
         )

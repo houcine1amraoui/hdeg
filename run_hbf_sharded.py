@@ -11,6 +11,10 @@ import yaml
 
 from src.models.hdeg.hbf import HierarchicalBehavioralForecaster
 
+from src.utils.seed import set_seed
+from src.utils.device import get_device
+from src.utils.get_folders_utils import get_processed_folder
+
 SPLITS = ("train", "val", "actor2_test", "actor1_test")
 SHARD_PATTERN = "shard_*.pt"
 
@@ -172,32 +176,37 @@ def save_output(path: Path, outputs: dict[str, Tensor], *, upstream: dict[str, A
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run HDEG HBF on representation shards.")
-    parser.add_argument("--config", type=Path, default=Path("config.yaml"))
-    parser.add_argument("--split", choices=SPLITS, default="train")
-    parser.add_argument("--batch_size", type=int, default=None)
-    parser.add_argument("--max_shards", type=int, default=None)
-    parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--device", default="cpu")
-    parser.add_argument("--checkpoint", type=Path, default=None)
+    with open("configs/config.yaml", "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    
+    set_seed(config["seed"])
+
+    device = get_device()
+
+    # # parse CLI args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_root_dir", type=str)
     args = parser.parse_args()
 
-    config = yaml.safe_load(args.config.read_text())
-    root = Path(config.get("project_root_dir", "."))
-    dataset_name = config["preprocessing"]["dataset_name"]
-    hcfg = config["hdeg"]["hbf"]
-    batch_size = args.batch_size if args.batch_size is not None else int(hcfg["batch_size"])
-    max_shards = args.max_shards if args.max_shards is not None else hcfg.get("max_shards")
-    overwrite = args.overwrite or bool(hcfg.get("overwrite", False))
-    hidden = int(hcfg.get("dynamics_hidden_dim", 128))
+    seed = int(config["seed"])
+    set_seed(seed)
 
-    device = torch.device(args.device)
+    batch_size = config["hdeg"]["ebrl"].get("batch_size", 32)
+    max_shards = config["hdeg"]["ebrl"].get("max_shards", None)
+    overwrite = config["hdeg"]["ebrl"].get("overwrite", False)
+
+    root = config["project_root_dir"]
+    dataset_name = config["preprocessing"]["dataset_name"]
+    hidden = int(config["hdeg"]["hbf"].get("dynamics_hidden_dim", 128))
+
     base = root / "data" / "processed" / dataset_name
-    dbrl_dir = base / "dbrl" / args.split
-    bse_dir = base / "bse" / args.split
-    bil_dir = base / "bil" / args.split
-    ebrl_dir = base / "ebrl" / args.split
-    out_dir = base / "hbf" / args.split
+
+    split = "train"
+    dbrl_dir = Path(f"{base}/dbrl/{split}")
+    bse_dir = Path(f"{base}/bse/{split}")
+    bil_dir = Path(f"{base}/bil/{split}")
+    ebrl_dir = Path(f"{base}/ebrl/{split}")
+    out_dir = Path(f"{base}/hbf/{split}")
 
     dbrl_paths = discover(dbrl_dir)
     bse_paths = discover(bse_dir)
@@ -217,7 +226,7 @@ def main() -> None:
 
     first = validate_upstream_bundle(
         dbrl_paths[0], bse_paths[0], bil_paths[0], ebrl_paths[0],
-        expected_split=args.split,
+        expected_split=split,
         expected_num_devices=None,
         expected_num_states=None,
         expected_embedding_dim=None,
@@ -237,7 +246,7 @@ def main() -> None:
     model.eval()
 
     print(f"HBF parameters      : {sum(p.numel() for p in model.parameters())}")
-    print(f"Processing split     : {args.split}")
+    print(f"Processing split     : {split}")
     print(f"Upstream shards      : {total}")
     print(f"Batch size           : {batch_size}")
     print(f"Device               : {device}")
@@ -247,7 +256,7 @@ def main() -> None:
     for i in range(limit):
         dbrl, bse, bil, ebrl = validate_upstream_bundle(
             dbrl_paths[i], bse_paths[i], bil_paths[i], ebrl_paths[i],
-            expected_split=args.split,
+            expected_split=split,
             expected_num_devices=N,
             expected_num_states=K,
             expected_embedding_dim=D,

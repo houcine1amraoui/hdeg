@@ -62,6 +62,12 @@ hdeg:
     max_shards: None
     overwrite: False
 
+  hbf:
+    batch_size: 32
+    dynamics_hidden_dim: 128
+    max_shards: None
+    overwrite: False
+
 training:
   model: mtad_gat
   batch_size: 32

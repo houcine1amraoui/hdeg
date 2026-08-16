@@ -240,9 +240,9 @@ def main() -> None:
         embedding_dim=D,
         dynamics_hidden_dim=hidden,
     ).to(device)
-    if args.checkpoint is not None:
-        state = torch.load(args.checkpoint, map_location=device, weights_only=True)
-        model.load_state_dict(state)
+    # if args.checkpoint is not None:
+    #     state = torch.load(args.checkpoint, map_location=device, weights_only=True)
+    #     model.load_state_dict(state)
     model.eval()
 
     print(f"HBF parameters      : {sum(p.numel() for p in model.parameters())}")

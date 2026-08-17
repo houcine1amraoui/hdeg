@@ -68,6 +68,12 @@ hdeg:
     max_shards: None
     overwrite: True
 
+  mbai:
+    batch_size: 32
+    max_shards: None
+    overwrite: False
+    fusion_weights: None
+
   e2e_training:
     epochs: 1
     lr: 0.0001

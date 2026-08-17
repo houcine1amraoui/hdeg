@@ -776,7 +776,7 @@ def main() -> None:
     output_dir = Path(f"{processed_root}/mbai/{split}")
 
     dataset = config["preprocessing"]["dataset_name"]
-    base = root / "data" / "processed" / dataset
+    base = f"{root}/data/processed/{dataset}"
 
     dbrl_dir = f"{base}/dbrl/{split}"
     bse_dir = f"{base}/bse/{split}"

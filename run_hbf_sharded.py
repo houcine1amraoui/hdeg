@@ -270,8 +270,10 @@ def main() -> None:
 
     split = "train"
 
-    checkpoint_path = config["hdeg"]["hbf"].get("checkpoint", None)
-    
+    checkpoint = config["hdeg"]["hbf"].get("checkpoint", None)
+
+    checkpoint_path = f"{root}/data/processed/{dataset_name}/hdeg_checkpoints/{checkpoint}"
+
     if not checkpoint_path.is_file():
         raise FileNotFoundError(
             f"Trained HDEG checkpoint not found: {checkpoint_path}. "

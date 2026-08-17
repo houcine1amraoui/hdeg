@@ -52,9 +52,10 @@ import torch
 import yaml
 
 from src.models.hdeg.mbai import MultiScaleBehavioralAnomalyInference
-from src.utils.device import get_device
-from src.utils.seed import set_seed
 
+from src.utils.seed import set_seed
+from src.utils.device import get_device
+from src.utils.get_folders_utils import get_processed_folder
 
 SPLITS = ("train", "val", "actor2_test", "actor1_test")
 LEVELS = ("Z", "S", "S_tilde", "g")
@@ -745,85 +746,42 @@ def parse_weights(text: str | None) -> dict[str, float] | None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Run frozen V1.0 MBAI on aligned HDEG shards."
-    )
-    parser.add_argument(
-        "--config",
-        default="configs/config.yaml",
-    )
-    parser.add_argument(
-        "--split",
-        choices=SPLITS,
-        default="train",
-    )
-    parser.add_argument(
-        "--hbf_dir",
-        default=None,
-    )
-    parser.add_argument(
-        "--output_dir",
-        default=None,
-    )
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=None,
-    )
-    parser.add_argument(
-        "--max_shards",
-        type=int,
-        default=None,
-    )
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--fusion_weights",
-        default=None,
-        help=(
-            "Optional fixed weights, e.g. "
-            "Z=1,S=1,S_tilde=1,g=1."
-        ),
-    )
-    args = parser.parse_args()
 
-    with open(args.config, "r", encoding="utf-8") as file:
-        config = yaml.safe_load(file)
+    with open("configs/config.yaml", "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+    
+    set_seed(config["seed"])
+
+    device = get_device()
+
+    # # parse CLI args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_root_dir", type=str)
+    args = parser.parse_args()
 
     seed = int(config["seed"])
     set_seed(seed)
-    device = get_device()
 
-    root = Path(config["project_root_dir"])
+    batch_size = config["hdeg"]["mbai"].get("batch_size", 32)
+    max_shards = config["hdeg"]["mbai"].get("max_shards", None)
+    overwrite = config["hdeg"]["mbai"].get("overwrite", False)
+    fusion_weights = config["hdeg"]["mbai"].get("fusion_weights", None)
+
+    root = config["project_root_dir"]
+    split = "train"
+
+    processed_root = get_processed_folder(config)
+
+    hbf_dir = Path(f"{processed_root}/hbf/{split}")
+    output_dir = Path(f"{processed_root}/mbai/{split}")
+
     dataset = config["preprocessing"]["dataset_name"]
     base = root / "data" / "processed" / dataset
 
-    hbf_dir = (
-        Path(args.hbf_dir)
-        if args.hbf_dir
-        else base / "hbf" / args.split
-    )
-
-    dbrl_dir = base / "dbrl" / args.split
-    bse_dir = base / "bse" / args.split
-    bil_dir = base / "bil" / args.split
-    ebrl_dir = base / "ebrl" / args.split
-
-    output_dir = (
-        Path(args.output_dir)
-        if args.output_dir
-        else base / "mbai" / args.split
-    )
-
-    batch_size = args.batch_size
-    if batch_size is None:
-        batch_size = int(
-            config.get("hdeg", {})
-            .get("mbai", {})
-            .get("batch_size", 32)
-        )
+    dbrl_dir = f"{base}/dbrl/{split}"
+    bse_dir = f"{base}/bse/{split}"
+    bil_dir = f"{base}/bil/{split}"
+    ebrl_dir = f"{base}/ebrl/{split}"
 
     weights = parse_weights(args.fusion_weights)
 
@@ -854,8 +812,8 @@ def main() -> None:
         batch_size=batch_size,
         device=device,
         fusion_weights=weights,
-        max_shards=args.max_shards,
-        overwrite=args.overwrite,
+        max_shards=max_shards,
+        overwrite=overwrite,
         seed=seed,
     )
 

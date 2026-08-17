@@ -195,6 +195,12 @@ def main() -> None:
     max_shards = config["hdeg"]["ebrl"].get("max_shards", None)
     overwrite = config["hdeg"]["ebrl"].get("overwrite", False)
 
+    checkpoint = config["hdeg"]["hbf"].get("checkpoint", None)
+    if checkpoint is not None:
+        checkpoint = Path(checkpoint)
+        if not checkpoint.is_file():
+            raise FileNotFoundError(f"HBF checkpoint not found: {checkpoint}")
+
     root = config["project_root_dir"]
     dataset_name = config["preprocessing"]["dataset_name"]
     hidden = int(config["hdeg"]["hbf"].get("dynamics_hidden_dim", 128))
@@ -240,9 +246,9 @@ def main() -> None:
         embedding_dim=D,
         dynamics_hidden_dim=hidden,
     ).to(device)
-    # if args.checkpoint is not None:
-    #     state = torch.load(args.checkpoint, map_location=device, weights_only=True)
-    #     model.load_state_dict(state)
+    if checkpoint is not None:
+        state = torch.load(checkpoint, map_location=device, weights_only=True)
+        model.load_state_dict(state)
     model.eval()
 
     print(f"HBF parameters      : {sum(p.numel() for p in model.parameters())}")

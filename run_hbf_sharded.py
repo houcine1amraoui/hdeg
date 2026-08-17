@@ -272,7 +272,7 @@ def main() -> None:
 
     checkpoint = config["hdeg"]["hbf"].get("checkpoint", None)
 
-    checkpoint_path = f"{root}/data/processed/{dataset_name}/hdeg_checkpoints/{checkpoint}"
+    checkpoint_path = Path(f"{root}/data/processed/{dataset_name}/hdeg_checkpoints/{checkpoint}")
 
     if not checkpoint_path.is_file():
         raise FileNotFoundError(

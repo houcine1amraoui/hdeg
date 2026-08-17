@@ -208,11 +208,11 @@ def main() -> None:
     base = f"{root}/data/processed/{dataset_name}"
 
     split = "train"
-    dbrl_dir = Path(f"{base}/dbrl/{split}")
-    bse_dir = Path(f"{base}/bse/{split}")
-    bil_dir = Path(f"{base}/bil/{split}")
-    ebrl_dir = Path(f"{base}/ebrl/{split}")
-    out_dir = Path(f"{base}/hbf/{split}")
+    dbrl_dir = Path(f"{base}/representations/dbrl/{split}")
+    bse_dir = Path(f"{base}/representations/bse/{split}")
+    bil_dir = Path(f"{base}/representations/bil/{split}")
+    ebrl_dir = Path(f"{base}/representations/ebrl/{split}")
+    out_dir = Path(f"{base}/forecasts/hbf/{split}")
 
     dbrl_paths = discover(dbrl_dir)
     bse_paths = discover(bse_dir)

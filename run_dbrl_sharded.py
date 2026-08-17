@@ -714,17 +714,11 @@ def main() -> None:
         config
     )
 
-    windows_dir = Path(
-        processed_data_folder
-    ) / "windows"
+    windows_dir = Path(processed_data_folder) / "windows"
 
     split_dir = Path(f"{windows_dir}/train")
 
-    output_dir = (
-        Path(processed_data_folder)
-        / "dbrl"
-        / "train"
-    )
+    output_dir = (Path(f"{processed_data_folder}/representations/dbrl/train"))
 
     if not split_dir.is_dir():
         raise FileNotFoundError(

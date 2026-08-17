@@ -68,6 +68,10 @@ hdeg:
     max_shards: None
     overwrite: True
 
+  e2e_training:
+    epochs: 1
+    lr: 0.0001
+
 training:
   model: mtad_gat
   batch_size: 32

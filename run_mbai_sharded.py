@@ -808,7 +808,7 @@ def main() -> None:
         bil_dir=bil_dir,
         ebrl_dir=ebrl_dir,
         output_dir=output_dir,
-        split=args.split,
+        split=split,
         batch_size=batch_size,
         device=device,
         fusion_weights=weights,

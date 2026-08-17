@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 from pathlib import Path
 from typing import Any, Optional
 
@@ -146,7 +147,67 @@ def run_batch(model, Z, S, S_tilde, g, device):
     )
 
 
-def save_output(path: Path, outputs: dict[str, Tensor], *, upstream: dict[str, Any], source_ebrl_shard: str, seed: int, dynamics_hidden_dim: int) -> None:
+def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        while True:
+            chunk = file.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_hbf_checkpoint(
+    checkpoint_path: Path,
+    *,
+    model: HierarchicalBehavioralForecaster,
+    device: torch.device,
+) -> tuple[int, dict[str, Any]]:
+    payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    if not isinstance(payload, dict):
+        raise TypeError(f"Checkpoint {checkpoint_path} must contain a dictionary payload.")
+
+    checkpoint_epoch = int(payload.get("epoch", -1))
+    metadata = {
+        "checkpoint_epoch": checkpoint_epoch,
+        "checkpoint_metrics": payload.get("metrics"),
+    }
+
+    if "model_state_dict" in payload:
+        state = payload["model_state_dict"]
+        if not isinstance(state, dict):
+            raise TypeError("checkpoint model_state_dict must be a mapping.")
+        # E2E checkpoints contain the complete HDEG model. HBF parameters are
+        # stored under the `hbf.` namespace. Load exactly that frozen HBF
+        # submodule rather than silently constructing a fresh forecaster.
+        hbf_state = {
+            key[len("hbf."):]: value
+            for key, value in state.items()
+            if key.startswith("hbf.")
+        }
+        if not hbf_state:
+            raise KeyError(
+                f"Checkpoint {checkpoint_path} contains model_state_dict but no 'hbf.' parameters."
+            )
+    else:
+        # Also accept an explicitly HBF-only state_dict for portability.
+        state = payload
+        if not all(isinstance(k, str) for k in state.keys()):
+            raise TypeError("HBF-only checkpoint state_dict keys must be strings.")
+        hbf_state = state
+
+    missing, unexpected = model.load_state_dict(hbf_state, strict=False)
+    if missing or unexpected:
+        raise RuntimeError(
+            f"HBF checkpoint incompatibility: missing={missing}, unexpected={unexpected}"
+        )
+
+    model.eval()
+    return checkpoint_epoch, metadata
+
+
+def save_output(path: Path, outputs: dict[str, Tensor], *, upstream: dict[str, Any], source_ebrl_shard: str, seed: int, dynamics_hidden_dim: int, checkpoint_path: Path, checkpoint_sha256: str, checkpoint_epoch: int, checkpoint_metrics: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "Z": outputs["Z"].cpu(),
@@ -171,13 +232,18 @@ def save_output(path: Path, outputs: dict[str, Tensor], *, upstream: dict[str, A
         "embedding_dim": int(outputs["g"].shape[1]),
         "dynamics_hidden_dim": int(dynamics_hidden_dim),
         "seed": int(seed),
+        "model_checkpoint": str(checkpoint_path),
+        "model_checkpoint_sha256": checkpoint_sha256,
+        "model_checkpoint_epoch": int(checkpoint_epoch),
+        "model_checkpoint_metrics": checkpoint_metrics,
+        "model_source": "train_hdeg_e2e.py checkpoint / hbf submodule",
     }
     torch.save(payload, path)
 
 
 def main() -> None:
     with open("configs/config.yaml", "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
+                config = yaml.safe_load(f)
     
     set_seed(config["seed"])
 
@@ -195,12 +261,7 @@ def main() -> None:
     max_shards = config["hdeg"]["ebrl"].get("max_shards", None)
     overwrite = config["hdeg"]["ebrl"].get("overwrite", False)
 
-    checkpoint = config["hdeg"]["hbf"].get("checkpoint", None)
-    if checkpoint is not None:
-        checkpoint = Path(checkpoint)
-        if not checkpoint.is_file():
-            raise FileNotFoundError(f"HBF checkpoint not found: {checkpoint}")
-
+    
     root = config["project_root_dir"]
     dataset_name = config["preprocessing"]["dataset_name"]
     hidden = int(config["hdeg"]["hbf"].get("dynamics_hidden_dim", 128))
@@ -208,6 +269,16 @@ def main() -> None:
     base = f"{root}/data/processed/{dataset_name}"
 
     split = "train"
+
+    checkpoint_path = config["hdeg"]["hbf"].get("checkpoint", None)
+    
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(
+            f"Trained HDEG checkpoint not found: {checkpoint_path}. "
+            "Pass --checkpoint explicitly. A fresh HBF is no longer allowed."
+        )
+    checkpoint_sha256 = sha256_file(checkpoint_path)
+
     dbrl_dir = Path(f"{base}/representations/dbrl/{split}")
     bse_dir = Path(f"{base}/representations/bse/{split}")
     bil_dir = Path(f"{base}/representations/bil/{split}")
@@ -246,12 +317,14 @@ def main() -> None:
         embedding_dim=D,
         dynamics_hidden_dim=hidden,
     ).to(device)
-    if checkpoint is not None:
-        state = torch.load(checkpoint, map_location=device, weights_only=True)
-        model.load_state_dict(state)
-    model.eval()
+    checkpoint_epoch, checkpoint_meta = load_hbf_checkpoint(
+        checkpoint_path, model=model, device=device
+    )
 
     print(f"HBF parameters      : {sum(p.numel() for p in model.parameters())}")
+    print(f"Checkpoint          : {checkpoint_path}")
+    print(f"Checkpoint SHA256    : {checkpoint_sha256}")
+    print(f"Checkpoint epoch     : {checkpoint_epoch}")
     print(f"Processing split     : {split}")
     print(f"Upstream shards      : {total}")
     print(f"Batch size           : {batch_size}")
@@ -287,7 +360,7 @@ def main() -> None:
         out_path = out_dir / ebrl_paths[i].name
         if out_path.exists() and not overwrite:
             raise FileExistsError(f"Output exists: {out_path}")
-        save_output(out_path, outputs_cpu, upstream=ebrl, source_ebrl_shard=ebrl_paths[i].name, seed=int(config["seed"]), dynamics_hidden_dim=hidden)
+        save_output(out_path, outputs_cpu, upstream=ebrl, source_ebrl_shard=ebrl_paths[i].name, seed=int(config["seed"]), dynamics_hidden_dim=hidden, checkpoint_path=checkpoint_path, checkpoint_sha256=checkpoint_sha256, checkpoint_epoch=checkpoint_epoch, checkpoint_metrics=checkpoint_meta.get("checkpoint_metrics"))
 
         saved = torch.load(out_path, map_location="cpu", weights_only=False)
         for key, expected in outputs_cpu.items():
@@ -310,7 +383,6 @@ def main() -> None:
     print(f"HBF output directory : {out_dir}")
     if max_shards is None:
         print("[PASS] Complete upstream shard set processed.")
-
 
 if __name__ == "__main__":
     main()

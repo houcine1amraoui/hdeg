@@ -52,10 +52,9 @@ import torch
 import yaml
 
 from src.models.hdeg.mbai import MultiScaleBehavioralAnomalyInference
-
-from src.utils.seed import set_seed
 from src.utils.device import get_device
-from src.utils.get_folders_utils import get_processed_folder
+from src.utils.seed import set_seed
+
 
 SPLITS = ("train", "val", "actor2_test", "actor1_test")
 LEVELS = ("Z", "S", "S_tilde", "g")
@@ -117,17 +116,21 @@ def validate_common_metadata(
     *,
     path: Path,
     expected_split: str,
+    require_num_states: bool = True,
 ) -> tuple[int, int]:
-    required = (
+    # DBRL is a device-level representation and therefore its frozen
+    # artifact contract does NOT contain num_states. BSE/BIL/EBRL do.
+    required = [
         "split",
         "shard_index",
         "start_index",
         "end_index",
         "window_size",
         "num_devices",
-        "num_states",
         "embedding_dim",
-    )
+    ]
+    if require_num_states:
+        required.append("num_states")
     missing = [key for key in required if key not in payload]
     if missing:
         raise KeyError(f"{path} is missing metadata: {missing}")
@@ -233,7 +236,10 @@ def validate_observed_bundle(
 
     for label, payload, path in payloads:
         start, end = validate_common_metadata(
-            payload, path=path, expected_split=expected_split
+            payload,
+            path=path,
+            expected_split=expected_split,
+            require_num_states=(label != "DBRL"),
         )
         ranges.append((start, end))
 
@@ -746,46 +752,89 @@ def parse_weights(text: str | None) -> dict[str, float] | None:
 
 
 def main() -> None:
-
-    with open("configs/config.yaml", "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-    
-    set_seed(config["seed"])
-
-    device = get_device()
-
-    # # parse CLI args
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project_root_dir", type=str)
+    parser = argparse.ArgumentParser(
+        description="Run frozen V1.0 MBAI on aligned HDEG shards."
+    )
+    parser.add_argument(
+        "--config",
+        default="configs/config.yaml",
+    )
+    parser.add_argument(
+        "--split",
+        choices=SPLITS,
+        default="train",
+    )
+    parser.add_argument(
+        "--hbf_dir",
+        default=None,
+    )
+    parser.add_argument(
+        "--output_dir",
+        default=None,
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--max_shards",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--fusion_weights",
+        default=None,
+        help=(
+            "Optional fixed weights, e.g. "
+            "Z=1,S=1,S_tilde=1,g=1."
+        ),
+    )
     args = parser.parse_args()
+
+    with open(args.config, "r", encoding="utf-8") as file:
+        config = yaml.safe_load(file)
 
     seed = int(config["seed"])
     set_seed(seed)
+    device = get_device()
 
-    batch_size = config["hdeg"]["mbai"].get("batch_size", 32)
-    max_shards = config["hdeg"]["mbai"].get("max_shards", None)
-    overwrite = config["hdeg"]["mbai"].get("overwrite", False)
-    fusion_weights = config["hdeg"]["mbai"].get("fusion_weights", None)
-
-    root = config["project_root_dir"]
-    split = "train"
-
-    processed_root = get_processed_folder(config)
-
-    hbf_dir = Path(f"{processed_root}/hbf/{split}")
-    output_dir = Path(f"{processed_root}/mbai/{split}")
-
+    root = Path(config["project_root_dir"])
     dataset = config["preprocessing"]["dataset_name"]
-    base = f"{root}/data/processed/{dataset}"
+    base = root / "data" / "processed" / dataset
 
-    dbrl_dir = Path(f"{base}/dbrl/{split}")
-    bse_dir = Path(f"{base}/bse/{split}")
-    bil_dir = Path(f"{base}/bil/{split}")
-    ebrl_dir = Path(f"{base}/ebrl/{split}")
+    hbf_dir = (
+        Path(args.hbf_dir)
+        if args.hbf_dir
+        else base / "hbf" / args.split
+    )
 
-    weights = parse_weights(fusion_weights)
+    dbrl_dir = base / "dbrl" / args.split
+    bse_dir = base / "bse" / args.split
+    bil_dir = base / "bil" / args.split
+    ebrl_dir = base / "ebrl" / args.split
 
-    print(f"MBAI split           : {split}")
+    output_dir = (
+        Path(args.output_dir)
+        if args.output_dir
+        else base / "mbai" / args.split
+    )
+
+    batch_size = args.batch_size
+    if batch_size is None:
+        batch_size = int(
+            config.get("hdeg", {})
+            .get("mbai", {})
+            .get("batch_size", 32)
+        )
+
+    weights = parse_weights(args.fusion_weights)
+
+    print(f"MBAI split           : {args.split}")
     print(f"HBF directory        : {hbf_dir}")
     print("Observed hierarchy   : DBRL + BSE + BIL + EBRL shards")
     print(f"Output directory     : {output_dir}")
@@ -808,12 +857,12 @@ def main() -> None:
         bil_dir=bil_dir,
         ebrl_dir=ebrl_dir,
         output_dir=output_dir,
-        split=split,
+        split=args.split,
         batch_size=batch_size,
         device=device,
         fusion_weights=weights,
-        max_shards=max_shards,
-        overwrite=overwrite,
+        max_shards=args.max_shards,
+        overwrite=args.overwrite,
         seed=seed,
     )
 

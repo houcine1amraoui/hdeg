@@ -783,9 +783,9 @@ def main() -> None:
     bil_dir = f"{base}/bil/{split}"
     ebrl_dir = f"{base}/ebrl/{split}"
 
-    weights = parse_weights(args.fusion_weights)
+    weights = parse_weights(fusion_weights)
 
-    print(f"MBAI split           : {args.split}")
+    print(f"MBAI split           : {split}")
     print(f"HBF directory        : {hbf_dir}")
     print("Observed hierarchy   : DBRL + BSE + BIL + EBRL shards")
     print(f"Output directory     : {output_dir}")

@@ -306,12 +306,9 @@ def main():
         
     set_seed(config["seed"])
 
-    device = get_device()
-
     # # parse CLI args
     parser = argparse.ArgumentParser()
     parser.add_argument("--project_root_dir", type=str)
-    args = parser.parse_args()
 
     seed = int(config["seed"])
     set_seed(seed)
@@ -330,13 +327,13 @@ def main():
 
     total = total_m = None
     try:
-        total, total_m = audit_split(base, args.split, a)
+        total, total_m = audit_split(base, split, a)
     except Exception as exc:
         a.fail("artifact_chain", str(exc))
 
     report = {
-        "dataset": args.dataset,
-        "split": args.split,
+        "dataset": dataset,
+        "split": split,
         "total_prediction_rows": total,
         "total_aligned_assessments": total_m,
         "status": "PASS" if not a.errors else "FAIL",
@@ -345,7 +342,7 @@ def main():
         "warnings": a.warnings,
     }
 
-    out = Path(output) if output else base / "inference_evidence_package" / f"artifact_audit_{args.split}.json"
+    out = Path(output) if output else base / "inference_evidence_package" / f"artifact_audit_{split}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
 

@@ -778,16 +778,16 @@ def main() -> None:
 
     processed_root = get_processed_folder(config)
 
-    hbf_dir = Path(f"{processed_root}/forecasts/hbf/{split}")
-    output_dir = Path(f"{processed_root}/anomaly_evidence/mbai/{split}")
+    hbf_dir = Path(f"{processed_root}/hbf/{split}")
+    output_dir = Path(f"{processed_root}/mbai/{split}")
 
     dataset = config["preprocessing"]["dataset_name"]
     base = f"{root}/data/processed/{dataset}"
 
-    dbrl_dir = Path(f"{base}/representations/dbrl/{split}")
-    bse_dir = Path(f"{base}/representations/bse/{split}")
-    bil_dir = Path(f"{base}/representations/bil/{split}")
-    ebrl_dir = Path(f"{base}/representations/ebrl/{split}")
+    dbrl_dir = Path(f"{base}/dbrl/{split}")
+    bse_dir = Path(f"{base}/bse/{split}")
+    bil_dir = Path(f"{base}/bil/{split}")
+    ebrl_dir = Path(f"{base}/ebrl/{split}")
 
     weights = parse_weights(fusion_weights)
 

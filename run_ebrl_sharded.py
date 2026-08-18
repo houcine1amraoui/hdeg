@@ -404,8 +404,8 @@ def main() -> None:
 
     split = "train"
     processed_root = get_processed_folder(config)
-    bil_split_dir = Path(f"{processed_root}/representations/bil/{split}")
-    ebrl_split_dir = Path(f"{processed_root}/representations/ebrl/{split}")
+    bil_split_dir = Path(f"{processed_root}/bil/{split}")
+    ebrl_split_dir = Path(f"{processed_root}/ebrl/{split}")
 
     print("=" * 70)
     print("HDEG — EBRL Sharded Standalone Execution")

@@ -812,7 +812,7 @@ def main() -> None:
     )
 
     bse_dir = (
-        Path(f"{processed_data_folder}/representations/bse")
+        Path(f"{processed_data_folder}/bse")
     )
 
     bse_split_dir = (
@@ -821,7 +821,7 @@ def main() -> None:
     )
 
     bil_dir = (
-        Path(f"{processed_data_folder}/representations/bil")
+        Path(f"{processed_data_folder}/bil")
     )
 
     bil_split_dir = (

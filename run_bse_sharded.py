@@ -796,10 +796,10 @@ def main() -> None:
         get_processed_folder(config)
     )
 
-    dbrl_dir = Path(f"{processed_data_folder}/representations/dbrl")
+    dbrl_dir = Path(f"{processed_data_folder}/dbrl")
     dbrl_split_dir = dbrl_dir / args.split
 
-    bse_dir = Path(f"{processed_data_folder}/representations/bse")
+    bse_dir = Path(f"{processed_data_folder}/bse")
     bse_split_dir = bse_dir / args.split
 
     # -------------------------------------------------------------

@@ -281,11 +281,11 @@ def main() -> None:
         )
     checkpoint_sha256 = sha256_file(checkpoint_path)
 
-    dbrl_dir = Path(f"{base}/representations/dbrl/{split}")
-    bse_dir = Path(f"{base}/representations/bse/{split}")
-    bil_dir = Path(f"{base}/representations/bil/{split}")
-    ebrl_dir = Path(f"{base}/representations/ebrl/{split}")
-    out_dir = Path(f"{base}/forecasts/hbf/{split}")
+    dbrl_dir = Path(f"{base}/dbrl/{split}")
+    bse_dir = Path(f"{base}/bse/{split}")
+    bil_dir = Path(f"{base}/bil/{split}")
+    ebrl_dir = Path(f"{base}/ebrl/{split}")
+    out_dir = Path(f"{base}/hbf/{split}")
 
     dbrl_paths = discover(dbrl_dir)
     bse_paths = discover(bse_dir)

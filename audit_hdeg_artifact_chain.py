@@ -36,7 +36,6 @@ from typing import Any
 import torch
 import yaml
 
-from src.utils.device import get_device
 from src.utils.seed import set_seed
 from src.utils.get_folders_utils import get_processed_folder
 

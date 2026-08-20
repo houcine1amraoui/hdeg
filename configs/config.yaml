@@ -80,14 +80,14 @@ hdeg:
     lr: 0.0001
 
 training:
-  model: mtad_gat
+  model: hdeg
   batch_size: 32
   epochs: 50
   lr: 0.0001
   patience: 10
 
 evaluation:
-  model: mtad_gat
+  model: hdeg
   batch_size: 32
   score_type: combined # combined, reconstruction, forecast
   score_aggregation: max # mean or max

@@ -708,48 +708,30 @@ def verify_bse_output_shard(
 # ---------------------------------------------------------------------
 
 def main() -> None:
-    # -------------------------------------------------------------
-    # Configuration and command-line arguments
-    # -------------------------------------------------------------
+    with open("configs/config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
 
-    with open(
-        "configs/config.yaml",
-        "r",
-        encoding="utf-8",
-    ) as file:
-        config = yaml.safe_load(file)
+    set_seed(config["seed"])
 
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run the frozen BSE module on persisted DBRL "
-            "representation shards."
-        )
-    )
+    device = get_device()
 
-    parser.add_argument(
-        "--project_root_dir",
-        type=str,
-        default=None,
-        help="Override project_root_dir from config.yaml.",
-    )
-
-    parser.add_argument(
-        "--split",
-        type=str,
-        default="train",
-        choices=SPLITS,
-        help="DBRL/BSE split to process.",
-    )
-
+    # # parse CLI args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_root_dir", type=str)
+    parser.add_argument("--split", type=str)
     args = parser.parse_args()
 
+    # override project_root_directory
     if args.project_root_dir:
         config["project_root_dir"] = args.project_root_dir
 
+    if args.split:
+        config["split"] = args.split
+    
     root = config["project_root_dir"]
+    print(root)
 
-    set_seed(config["seed"])
-    device = get_device()
+    split = config["split"]
 
     batch_size = int(
         config["hdeg"]["dbrl"]["batch_size"]
@@ -797,10 +779,10 @@ def main() -> None:
     )
 
     dbrl_dir = Path(f"{processed_data_folder}/dbrl")
-    dbrl_split_dir = dbrl_dir / args.split
+    dbrl_split_dir = dbrl_dir / split
 
     bse_dir = Path(f"{processed_data_folder}/bse")
-    bse_split_dir = bse_dir / args.split
+    bse_split_dir = bse_dir / split
 
     # -------------------------------------------------------------
     # Behavioral-state configuration paths
@@ -822,7 +804,7 @@ def main() -> None:
     print("=" * 70)
     print("HDEG — BSE Sharded Standalone Execution")
     print("=" * 70)
-    print(f"Split               : {args.split}")
+    print(f"Split               : {split}")
     print(f"DBRL input directory : {dbrl_split_dir}")
     print(f"BSE output directory : {bse_split_dir}")
     print(f"Device               : {device}")
@@ -957,7 +939,7 @@ def main() -> None:
 
     first_payload = load_dbrl_representation_shard(
         shard_path=shard_paths[0],
-        expected_split=args.split,
+        expected_split=split,
         expected_num_devices=num_devices,
         expected_embedding_dim=None,
     )
@@ -1027,7 +1009,7 @@ def main() -> None:
 
         payload = load_dbrl_representation_shard(
             shard_path=shard_path,
-            expected_split=args.split,
+            expected_split=split,
             expected_num_devices=num_devices,
             expected_embedding_dim=embedding_dim,
         )

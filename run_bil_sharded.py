@@ -713,10 +713,10 @@ def main() -> None:
 
     split = config["split"]
 
-    batch_size = config["hdeg"]["dbrl"]["batch_size"]
-    max_batches = config["hdeg"]["dbrl"]["max_batches"]
-    max_shards = config["hdeg"]["dbrl"]["max_shards"]
-    overwrite = config["hdeg"]["dbrl"]["overwrite"]
+    batch_size = config["hdeg"]["bil"]["batch_size"]
+    max_batches = config["hdeg"]["bil"]["max_batches"]
+    max_shards = config["hdeg"]["bil"]["max_shards"]
+    overwrite = config["hdeg"]["bil"]["overwrite"]
 
     # -------------------------------------------------------------
     # Processed-data paths

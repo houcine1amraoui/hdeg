@@ -653,40 +653,28 @@ def main() -> None:
     # Configuration
     # -------------------------------------------------------------
 
-    with open(
-        "configs/config.yaml",
-        "r",
-        encoding="utf-8",
-    ) as f:
+    with open("configs/config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     set_seed(config["seed"])
 
     device = get_device()
 
-    # -------------------------------------------------------------
-    # CLI arguments
-    # -------------------------------------------------------------
-
     # # parse CLI args
     parser = argparse.ArgumentParser()
     parser.add_argument("--project_root_dir", type=str)
+    parser.add_argument("--split", type=str)
     args = parser.parse_args()
 
     # override project_root_directory
     if args.project_root_dir:
         config["project_root_dir"] = args.project_root_dir
 
+    if args.split:
+        config["split"] = args.split
+    
     root = config["project_root_dir"]
     print(root)
-
-    parser.add_argument(
-        "--split",
-        type=str,
-        default="train",
-        choices=SPLITS,
-        help="Window split to process.",
-    )
 
     batch_size = config["hdeg"]["dbrl"]["batch_size"]
     
@@ -776,7 +764,7 @@ def main() -> None:
     print("=" * 70)
 
     print(
-        f"Split              : train"
+        f"Split              : {config['split']}"
     )
 
     print(

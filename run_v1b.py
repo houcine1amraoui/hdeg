@@ -23,7 +23,9 @@ def main():
     # # parse CLI args
     parser = argparse.ArgumentParser()
     parser.add_argument("--project_root_dir", type=str)
-
+    parser.add_argument("--split", type=str)
+    args = parser.parse_args()
+    
     seed = int(config["seed"])
     set_seed(seed)
 

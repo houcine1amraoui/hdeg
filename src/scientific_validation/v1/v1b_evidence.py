@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict
-from v1b_io import save_json
+from src.scientific_validation.v1.v1b_io import save_json
 
 
 def write_v1b_evidence(output_root: Path, evidence: dict) -> None:

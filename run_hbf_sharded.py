@@ -243,7 +243,7 @@ def save_output(path: Path, outputs: dict[str, Tensor], *, upstream: dict[str, A
 
 def main() -> None:
     with open("configs/config.yaml", "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
+        config = yaml.safe_load(f)
     
     set_seed(config["seed"])
 
@@ -252,8 +252,17 @@ def main() -> None:
     # # parse CLI args
     parser = argparse.ArgumentParser()
     parser.add_argument("--project_root_dir", type=str)
+    parser.add_argument("--split", type=str)
     args = parser.parse_args()
 
+    # override project_root_directory
+    if args.project_root_dir:
+        config["project_root_dir"] = args.project_root_dir
+
+    if args.split:
+        config["split"] = args.split
+
+    split = config.get("split")
     seed = int(config["seed"])
     set_seed(seed)
 
@@ -267,8 +276,6 @@ def main() -> None:
     hidden = int(config["hdeg"]["hbf"].get("dynamics_hidden_dim", 128))
 
     base = f"{root}/data/processed/{dataset_name}"
-
-    split = "train"
 
     checkpoint = config["hdeg"]["hbf"].get("checkpoint", None)
 

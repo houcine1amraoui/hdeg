@@ -66,6 +66,7 @@ def discover_shards(
     split: str,
 ) -> list[int]:
     first = f"{artifact_root}/dbrl/{split}"
+    print(f"Discovering representation shards in {first}...")
     if not Path(first).exists():
         return []
     out = []

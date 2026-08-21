@@ -679,11 +679,8 @@ def main() -> None:
     split = config["split"]
 
     batch_size = config["hdeg"]["dbrl"]["batch_size"]
-    
     max_batches = config["hdeg"]["dbrl"]["max_batches"]
-
     max_shards = config["hdeg"]["dbrl"]["max_shards"]
-
     overwrite = config["hdeg"]["dbrl"]["overwrite"]
     
     if max_shards is not None and max_shards <= 0:

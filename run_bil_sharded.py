@@ -688,120 +688,35 @@ def verify_bil_output_shard(
 # ---------------------------------------------------------------------
 
 def main() -> None:
-    with open(
-        "configs/config.yaml",
-        "r",
-        encoding="utf-8",
-    ) as file:
-        config = yaml.safe_load(file)
+    with open("configs/config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
 
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run the frozen HDEG BIL module on persisted "
-            "BSE representation shards."
-        )
-    )
-
-    parser.add_argument(
-        "--project_root_dir",
-        type=str,
-        default=None,
-        help="Override project_root_dir from config.yaml.",
-    )
-
-    parser.add_argument(
-        "--split",
-        type=str,
-        default="train",
-        choices=SPLITS,
-        help="BSE/BIL split to process.",
-    )
-
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=None,
-        help=(
-            "BIL inference batch size. If omitted, use "
-            "hdeg.bil.batch_size when configured; otherwise "
-            "fall back to hdeg.bse.batch_size."
-        ),
-    )
-
-    parser.add_argument(
-        "--max_shards",
-        type=int,
-        default=None,
-        help=(
-            "Process only the first N shards. This is intended "
-            "for controlled verification runs."
-        ),
-    )
-
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Overwrite existing BIL representation shards.",
-    )
-
-    args = parser.parse_args()
-
-    if args.project_root_dir:
-        config["project_root_dir"] = (
-            args.project_root_dir
-        )
-
-    root = config["project_root_dir"]
-
-    set_seed(
-        int(config["seed"])
-    )
+    set_seed(config["seed"])
 
     device = get_device()
 
-    bil_config = config["hdeg"].get(
-        "bil",
-        {},
-    )
+    # # parse CLI args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_root_dir", type=str)
+    parser.add_argument("--split", type=str)
+    args = parser.parse_args()
 
-    if args.batch_size is not None:
-        batch_size = int(
-            args.batch_size
-        )
-    elif "batch_size" in bil_config:
-        batch_size = int(
-            bil_config["batch_size"]
-        )
-    else:
-        # Current config.yaml has no BIL block yet. Reusing the established
-        # BSE batch size is an execution-level compatibility choice only.
-        batch_size = int(
-            config["hdeg"]["bse"]["batch_size"]
-        )
+    # override project_root_directory
+    if args.project_root_dir:
+        config["project_root_dir"] = args.project_root_dir
 
-    max_shards = (
-        args.max_shards
-        if args.max_shards is not None
-        else bil_config.get("max_shards", None)
-    )
+    if args.split:
+        config["split"] = args.split
+    
+    root = config["project_root_dir"]
+    print(root)
 
-    overwrite = bool(
-        args.overwrite
-        or bil_config.get("overwrite", False)
-    )
+    split = config["split"]
 
-    if batch_size <= 0:
-        raise ValueError(
-            "BIL batch_size must be greater than zero."
-        )
-
-    if max_shards is not None:
-        max_shards = int(max_shards)
-
-        if max_shards <= 0:
-            raise ValueError(
-                "max_shards must be greater than zero."
-            )
+    batch_size = config["hdeg"]["dbrl"]["batch_size"]
+    max_batches = config["hdeg"]["dbrl"]["max_batches"]
+    max_shards = config["hdeg"]["dbrl"]["max_shards"]
+    overwrite = config["hdeg"]["dbrl"]["overwrite"]
 
     # -------------------------------------------------------------
     # Processed-data paths
@@ -839,7 +754,7 @@ def main() -> None:
     )
     print("=" * 70)
     print(
-        f"Split                : {args.split}"
+        f"Split                : {split}"
     )
     print(
         f"BSE input directory  : {bse_split_dir}"
@@ -903,7 +818,7 @@ def main() -> None:
     first_payload = (
         load_bse_representation_shard(
             shard_path=shard_paths[0],
-            expected_split=args.split,
+            expected_split=split,
             expected_num_states=9,
             expected_embedding_dim=None,
         )
@@ -996,7 +911,7 @@ def main() -> None:
         payload = (
             load_bse_representation_shard(
                 shard_path=shard_path,
-                expected_split=args.split,
+                expected_split=split,
                 expected_num_states=num_states,
                 expected_embedding_dim=embedding_dim,
             )

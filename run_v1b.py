@@ -16,14 +16,13 @@ from src.utils.get_folders_utils import get_processed_folder
 
 def main():
     with open("configs/config.yaml", "r", encoding="utf-8") as f:
-                    config = yaml.safe_load(f)
+        config = yaml.safe_load(f)
     
     set_seed(config["seed"])
 
     # # parse CLI args
     parser = argparse.ArgumentParser()
     parser.add_argument("--project_root_dir", type=str)
-    args = parser.parse_args()
 
     seed = int(config["seed"])
     set_seed(seed)

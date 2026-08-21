@@ -30,7 +30,7 @@ def main():
     set_seed(seed)
 
     processed_folder = get_processed_folder(config)
-    artifact_root = f"{processed_folder}/CU"
+    artifact_root = f"{processed_folder}"
 
     window_root = f"{processed_folder}/CU/windows"
     output_root = f"{processed_folder}/CU/v1_validation"

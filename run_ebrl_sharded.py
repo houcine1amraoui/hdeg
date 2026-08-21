@@ -386,8 +386,17 @@ def main() -> None:
     # # parse CLI args
     parser = argparse.ArgumentParser()
     parser.add_argument("--project_root_dir", type=str)
+    parser.add_argument("--split", type=str)
     args = parser.parse_args()
 
+    # override project_root_directory
+    if args.project_root_dir:
+        config["project_root_dir"] = args.project_root_dir
+
+    if args.split:
+        config["split"] = args.split
+
+    split = config.get("split")
     seed = int(config["seed"])
     set_seed(seed)
 
@@ -402,7 +411,7 @@ def main() -> None:
         if max_shards <= 0:
             raise ValueError("max_shards must be greater than zero.")
 
-    split = "train"
+    
     processed_root = get_processed_folder(config)
     bil_split_dir = Path(f"{processed_root}/bil/{split}")
     ebrl_split_dir = Path(f"{processed_root}/ebrl/{split}")

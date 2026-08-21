@@ -79,18 +79,9 @@ hdeg:
     epochs: 1
     lr: 0.0001
 
-training:
-  model: hdeg
-  batch_size: 32
-  epochs: 50
-  lr: 0.0001
-  patience: 10
-
-evaluation:
-  model: hdeg
-  batch_size: 32
-  score_type: combined # combined, reconstruction, forecast
-  score_aggregation: max # mean or max
-  score_smoothing_enabled: true
-  score_smoothing_window: 5
-  threshold_percentile: 90
+v1_validation:
+  r2-pairs: 100000
+  r3-max: 50000
+  r1-reservoir: 100000
+  r1-chunk: 512
+  bootstrap-replicates: 1000

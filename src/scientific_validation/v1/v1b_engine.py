@@ -97,6 +97,7 @@ class V1BEngine:
         This is intended only for <=50k R3 samples. It is not used for the
         complete CU corpus. Full R1 processing remains shard-wise.
         """
+        print(f"Collecting representation for split={split}...")
         shard_ids = discover_shards(self.cfg.artifact_root, split)
         if not shard_ids:
             raise RuntimeError(f"No representation shards for split={split}")

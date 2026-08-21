@@ -676,6 +676,8 @@ def main() -> None:
     root = config["project_root_dir"]
     print(root)
 
+    split = config["split"]
+
     batch_size = config["hdeg"]["dbrl"]["batch_size"]
     
     max_batches = config["hdeg"]["dbrl"]["max_batches"]
@@ -704,9 +706,9 @@ def main() -> None:
 
     windows_dir = Path(processed_data_folder) / "windows"
 
-    split_dir = Path(f"{windows_dir}/train")
+    split_dir = Path(f"{windows_dir}/{split}")
 
-    output_dir = (Path(f"{processed_data_folder}/dbrl/train"))
+    output_dir = (Path(f"{processed_data_folder}/dbrl/{split}"))
 
     if not split_dir.is_dir():
         raise FileNotFoundError(
@@ -719,7 +721,7 @@ def main() -> None:
 
     manifest = load_manifest(
         windows_dir=windows_dir,
-        split="train",
+        split=split,
     )
 
     num_devices = int(
@@ -883,7 +885,7 @@ def main() -> None:
 
         artifact = load_window_shard(
             shard_path=shard_path,
-            expected_split="train",
+            expected_split=split,
             expected_window_size=window_size,
             expected_num_devices=num_devices,
         )
@@ -996,7 +998,7 @@ def main() -> None:
         save_representations_kwargs = {
             "output_path": output_path,
             "Z": Z,
-            "split": "train",
+            "split": split,
             "source_shard": manifest_entry,
             "shard_index": shard_index,
             "start_index": start_index,

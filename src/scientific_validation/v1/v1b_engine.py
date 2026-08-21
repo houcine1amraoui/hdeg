@@ -13,12 +13,12 @@ import time
 
 import numpy as np
 
-from v1b_io import (
+from src.scientific_validation.v1.v1b_io import (
     discover_shards,
     load_representation_shard,
     load_window_shard,
 )
-from v1b_metrics import (
+from src.scientific_validation.v1.v1b_metrics import (
     Reservoir,
     bootstrap_energy_ci,
     behavioral_window_distance,
@@ -28,7 +28,7 @@ from v1b_metrics import (
     spearman_rho,
     within_chunk_pair_distances,
 )
-from v1b_sampling import (
+from src.scientific_validation.v1.v1b_sampling import (
     condition_sampling_plan,
     deterministic_pairs,
     deterministic_sample_indices,

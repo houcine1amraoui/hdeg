@@ -67,8 +67,6 @@ def load_representation_shard(
         if not p.exists():
             raise FileNotFoundError(p)
         obj = torch.load(p, map_location=device)
-        print(f"REPRESENTATION_KEY: {REPRESENTATION_KEY}")
-        print(f"Loaded {level} representation shard: {p}")
         tensor = _extract_tensor(obj, REPRESENTATION_KEY)
         result[level] = tensor.detach().cpu().numpy()
     return result

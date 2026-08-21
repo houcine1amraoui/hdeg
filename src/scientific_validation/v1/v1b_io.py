@@ -9,6 +9,7 @@ import json
 
 import numpy as np
 import torch
+from src.utils.device import get_device
 
 
 LEVEL_DIRS = {
@@ -50,12 +51,13 @@ def load_representation_shard(
     split: str,
     shard_index: int,
 ) -> Dict[str, np.ndarray]:
+    device = get_device()
     result = {}
     for level, dirname in LEVEL_DIRS.items():
         p = Path(f"{artifact_root}/{dirname}/{split}/shard_{shard_index:06d}.pt")
         if not p.exists():
             raise FileNotFoundError(p)
-        obj = torch.load(p, map_location="cpu")
+        obj = torch.load(p, map_location=device)
         print(f"LEVEL_KEYS: {LEVEL_KEYS}")
         print(f"Loaded {level} representation shard: {p}")
         tensor = _extract_tensor(obj, LEVEL_KEYS[level])

@@ -65,11 +65,11 @@ def discover_shards(
     artifact_root: Path,
     split: str,
 ) -> list[int]:
-    first = artifact_root / "dbrl" / split
-    if not first.exists():
+    first = f"{artifact_root}/dbrl/{split}"
+    if not Path(first).exists():
         return []
     out = []
-    for p in sorted(first.glob("shard_*.pt")):
+    for p in sorted(Path(first).glob("shard_*.pt")):
         try:
             out.append(int(p.stem.split("_")[-1]))
         except ValueError:

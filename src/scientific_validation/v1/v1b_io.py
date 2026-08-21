@@ -52,7 +52,7 @@ def load_representation_shard(
 ) -> Dict[str, np.ndarray]:
     result = {}
     for level, dirname in LEVEL_DIRS.items():
-        p = artifact_root / dirname / split / f"shard_{shard_index:06d}.pt"
+        p = f"{artifact_root}/{dirname}/{split}/shard_{shard_index:06d}.pt"
         if not p.exists():
             raise FileNotFoundError(p)
         obj = torch.load(p, map_location="cpu")

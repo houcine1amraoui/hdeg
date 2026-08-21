@@ -19,12 +19,7 @@ LEVEL_DIRS = {
     "g": "ebrl",
 }
 
-LEVEL_KEYS = {
-    "Z": ("Z", "z", "dbrl"),
-    "S": ("S", "s", "bse"),
-    "S_tilde": ("S_tilde", "S_tilde_hat", "s_tilde", "bil"),
-    "g": ("g", "G", "ebrl"),
-}
+REPRESENTATION_KEY = "representations"
 
 
 @dataclass
@@ -36,14 +31,28 @@ class ShardRecord:
     paths: Dict[str, Path]
 
 
-def _extract_tensor(obj, keys):
-    if torch.is_tensor(obj):
-        return obj
-    if isinstance(obj, dict):
-        for k in keys:
-            if k in obj and torch.is_tensor(obj[k]):
-                return obj[k]
-    raise KeyError(f"Could not find tensor using keys={keys}")
+def _extract_tensor(obj, REPRESENTATION_KEY):
+    if not isinstance(obj, dict):
+        raise TypeError(
+            f"Expected shard object to be a dict, "
+            f"received {type(obj).__name__}"
+        )
+
+    if REPRESENTATION_KEY in obj:
+        tensor = obj[REPRESENTATION_KEY]
+
+        if not isinstance(tensor, torch.Tensor):
+            raise TypeError(
+                f"'{REPRESENTATION_KEY}' must be a torch.Tensor, "
+                f"received {type(tensor).__name__}"
+            )
+
+        return tensor
+
+    raise KeyError(
+        f"Could not find '{REPRESENTATION_KEY}' in representation shard. "
+        f"Available keys={tuple(obj.keys())}"
+    )
 
 
 def load_representation_shard(
@@ -58,9 +67,9 @@ def load_representation_shard(
         if not p.exists():
             raise FileNotFoundError(p)
         obj = torch.load(p, map_location=device)
-        print(f"LEVEL_KEYS: {LEVEL_KEYS}")
+        print(f"REPRESENTATION_KEY: {REPRESENTATION_KEY}")
         print(f"Loaded {level} representation shard: {p}")
-        tensor = _extract_tensor(obj, LEVEL_KEYS[level])
+        tensor = _extract_tensor(obj, REPRESENTATION_KEY)
         result[level] = tensor.detach().cpu().numpy()
     return result
 

@@ -94,7 +94,7 @@ def load_window_shard(
     split: str,
     shard_index: int,
 ) -> dict:
-    p = window_root / split / f"shard_{shard_index:06d}.npz"
+    p = Path(f"{window_root}/{split}/shard_{shard_index:06d}.npz")
     if not p.exists():
         raise FileNotFoundError(p)
     with np.load(p, allow_pickle=False) as z:

@@ -12,6 +12,7 @@ from typing import Dict, List, Tuple
 import time
 
 import numpy as np
+from tqdm import tqdm
 
 from src.scientific_validation.v1.v1b_io import (
     discover_shards,
@@ -222,7 +223,7 @@ class V1BEngine:
         dists = {l: np.empty(len(pairs), dtype=np.float64) for l in LEVELS}
         strata = {}
 
-        for k, (i, j) in enumerate(pairs):
+        for k, (i, j) in tqdm(enumerate(pairs), total=len(pairs)):
             bx[k] = behavioral_window_distance(X[i], X[j])
             for l in LEVELS:
                 dists[l][k] = native_pair_distances(

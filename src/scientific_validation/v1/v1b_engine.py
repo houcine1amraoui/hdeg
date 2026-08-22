@@ -337,7 +337,7 @@ class V1BEngine:
                 "claim_decision": "not_performed",
             },
             # "r1": self.run_r1(),
-            "r2": self.run_r2(),
+            # "r2": self.run_r2(),
             "r3": self.run_r3(),
             "provenance": {
                 "execution_started_unix": started,

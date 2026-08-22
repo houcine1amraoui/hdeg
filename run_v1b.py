@@ -32,8 +32,8 @@ def main():
     processed_folder = get_processed_folder(config)
     artifact_root = f"{processed_folder}"
 
-    window_root = f"{processed_folder}/CU/windows"
-    output_root = f"{processed_folder}/CU/v1_validation"
+    window_root = f"{processed_folder}/windows"
+    output_root = f"{processed_folder}/v1_validation"
 
     r2_pairs = config["v1_validation"]["r2-pairs"]
     r3_max = config["v1_validation"]["r3-max"]

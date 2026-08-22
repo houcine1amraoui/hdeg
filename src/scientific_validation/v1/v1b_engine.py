@@ -335,7 +335,7 @@ class V1BEngine:
                 "r3_block_length_windows": self.cfg.r3_block_length_windows,
                 "claim_decision": "not_performed",
             },
-            "r1": self.run_r1(),
+            # "r1": self.run_r1(),
             "r2": self.run_r2(),
             "r3": self.run_r3(),
             "provenance": {
